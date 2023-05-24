@@ -1,0 +1,458 @@
+---
+title: "R Notebook"
+editor_options:
+  chunk_output_type: console
+---
+https://web.stanford.edu/class/bios221/Pune/Labs/Lab_phyloseq/Phyloseq_Lab.html#bonus_material_:-) =abundance etc
+
+```{r}
+library(dplyr)
+library(phyloseq)
+library(metagenomeSeq)
+library(vegan)
+library (ranacapa)
+library(microbiome)
+library(metagMisc)
+library(devtools)
+library(MicEco)
+```
+
+```{r}
+load ("./ITS/ITS_phy_meta.RData")
+ITS_phy
+sample_names_ITS <- sample_names(ITS_phy)
+write.csv(sample_names_ITS, "ITS/sample_names_ITS.csv", row.names=TRUE)
+```
+
+change metadata with the metadata with the right Mc counts
+```{r}
+data <- read.csv("./ITS/metadata_DNA-RNA - CorrMc-final.csv", sep =';', row.names = 1)
+sample_data(ITS_phy) <- sample_data(data)
+colnames(ITS_phy@sam_data)
+```
+
+
+1.check reads count 
+
+```{r}
+reads_sample <- as.data.frame (readcount(ITS_phy))
+sum(readcount(ITS_phy)) #162300940
+summary(readcount(ITS_phy))
+
+summary (readcount(subset_samples(ITS_phy, time.point %in% c("T0", "T1"))))
+sum (readcount(subset_samples(ITS_phy, time.point %in% c("T0", "T1"))))
+
+summary (readcount(subset_samples(ITS_phy, time.point=="T2")))
+sum (readcount(subset_samples(ITS_phy, time.point=="T2")))
+
+summary (readcount(subset_samples(ITS_phy, time.point=="T3")))
+sum (readcount(subset_samples(ITS_phy, time.point=="T3")))
+```
+
+2. check taxonomy
+```{r}
+rank_names(ITS_phy)
+colnames(tax_table(ITS_phy)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus", "Species")
+taxonomy <- ITS_phy@tax_table@.Data
+get_taxa_unique(ITS_phy, taxonomic.rank = "Phylum")
+
+ITS_phy #92091
+table(tax_table(ITS_phy)[, "phylum"], exclude = NULL)
+
+ps.ITS <- subset_taxa(ITS_phy, Phylum %in% c("Ascomycota", "Basidiomycota", "Glomeromycota", "Mortierellomycota", "Neocallimastigomycota", "Olpidiomycota", "Rozellomycota","Zoopagomycota", "Aphelidiomycota", "Basidiobolomycota", "Entomophthoromycota", "Chytridiomycota", "Monoblepharomycota", "Mucoromycota"))
+ps.ITS
+
+
+save(ps.ITS, file = './ITS/ps-selected-only-ITS.RData')
+```
+
+3. filtering
+
+```{r}
+load(file = './ITS/ps-selected-only-ITS.RData')
+```
+
+a) remove contaminants - no for fungi
+```{r}
+library(decontam)
+df <- as.data.frame(sample_data(ps.ITS)) # Put sample_data into a ggplot-friendly data.frame
+df$LibrarySize <- sample_sums(ps.ITS)
+df <- df[order(df$LibrarySize),]
+df$Index <- seq(nrow(df))
+ggplot(data=df, aes(x=Index, y=LibrarySize, color=sample.type)) + geom_point()
+```
+
+```{r}
+sample_data(ps.ITS)$is.neg <- sample_data(ps.ITS)$sample.type == "NEG"
+contamdf.prev01 <- isContaminant(ps.ITS, 
+                                 method="prevalence", neg="is.neg",
+                                 batch = sample_data(ps.ITS)$time.point ,
+                                 threshold=0.1)
+table(contamdf.prev01$contaminant)
+#FALSE  TRUE 
+#14230   299 
+
+head(which(contamdf.prev01$contaminant))
+#12 19 43 47 49 61
+```
+
+```{r}
+ps.contam <- prune_taxa(contamdf.prev01$contaminant, ps.ITS)
+ps.contam
+plot_bar(ps.contam, x = "sample.type", y = "Abundance") + #fill = "genus"
+  facet_wrap(. ~ family)
+
+#check_taxa <- subset_taxa(ps.fungi, Family == "Malasseziaceae") #Pasteurellaceae #Oxalofunteraceae #Pseudomonadaceae
+#plot_bar(check_taxa, x = "sample.type", y = "Abundance", fill = "Genus")
+
+ps.fungi1 <- prune_taxa(!contamdf.prev01$contaminant, ps.ITS)
+ps.fungi1
+```
+
+```{r}
+ps.pa <- transform_sample_counts(ps.fungi, function(abund) 1*(abund>0))
+ps.pa.neg <- prune_samples(sample_data(ps.pa)$sample.type == "neg", ps.pa)
+ps.pa.pos <- prune_samples(sample_data(ps.pa)$sample.type == "rhizo" | sample_data(ps.pa)$sample.type == "bulk", ps.pa)
+# Make data.frame of prevalence in positive and negative samples
+df.pa <- data.frame(pa.pos=taxa_sums(ps.pa.pos),
+                    pa.neg=taxa_sums(ps.pa.neg),
+                    contaminant=contamdf.prev01$contaminant)
+ggplot(data=df.pa, aes(x=pa.neg, y=pa.pos, color=contaminant)) + geom_point() +
+  xlab("Prevalence (Negative Controls)") + ylab("Prevalence (True Samples)")
+```
+
+```{r}
+ps.fungi <- prune_taxa(!contamdf.prev01$contaminant, ps.fungi)
+```
+
+b)
+## remove negatives 
+
+```{r}
+ps.ITS.neg <- subset_samples(ps.ITS, sample.type == "NEG" ) #6 samples
+save (ps.ITS.neg, file= "ITS/negative_samples_ITS.Rdata")
+
+ps.ITS <- subset_samples(ps.ITS, !cc == "NEG") 
+ps.ITS #844 samples
+sample_names((ps.ITS))
+ps.ITS@sam_data$cc
+```
+
+c)remove low counts etc
+
+c1)
+
+https://www.bioconductor.org/packages/devel/bioc/vignettes/phyloseq/inst/doc/phyloseq-analysis.html
+
+###NO
+1. PREVALENCE - explore feature prevalence in the dataset, which we will define here as the number of samples in which a taxa appears at least once.
+```{r}
+# Compute prevalence of each feature, store as data.frame
+prevdf = apply(X = otu_table(ps.fungi),
+                 MARGIN = ifelse(taxa_are_rows(ps.fungi), yes = 1, no = 2),
+                 FUN = function(x){sum(x > 0)})
+# Add taxonomy and total read counts to this data.frame
+prevdf = data.frame(Prevalence = prevdf,
+                      TotalAbundance = taxa_sums(ps.fungi),
+                      tax_table(ps.fungi))
+plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+```
+
+
+c2)
+```{r remove singletons}
+length(which(taxa_sums(ps.ITS) <= 1)) #147 how many singletons
+length(which(taxa_sums(ps.ITS) <= 2)) #221 singletons and doubletons
+round((147/14529)*100, digits = 2) #1.01 singletons
+
+
+ps.singletons <-prune_taxa(taxa_sums(ps.ITS) <= 1, ps.ITS)
+summarize_phyloseq(ps.singletons) #zero singletons - min 0, max 1
+table(tax_table(ps.singletons)[, "family"], exclude = NULL)
+otu_singletons <- as.data.frame(ps.singletons@otu_table)
+write.csv(otu_singletons, "ITS/otu_table_singletons.csv", row.names=FALSE)
+save(ps.singletons, file = 'ITS/psonlyITSsingletons.RData')
+
+ps.nosingletons <- prune_taxa(taxa_sums(ps.ITS) > 1, ps.ITS)
+summarize_phyloseq(ps.nosingletons)
+length(which(taxa_sums(ps.nosingletons) <= 1))
+ps.nosingletons
+ps.ITS
+
+#do on the actual ps.its
+ps.ITS <- prune_taxa(taxa_sums(ps.ITS) > 1, ps.ITS)
+ps.ITS
+```
+
+c3) remove taxa that were only observed 1 time in the whole dataset
+```{r}
+(taxa_sums(ps.ITS) > 1) %>% sum
+
+ps.ITS.2in20 = filter_taxa(ps.ITS, function(x) sum(x > 2) > (0.2*length(x)), TRUE)
+ps.ITS.2in20 #196 taxa
+
+ps.ITS.1in20 = filter_taxa(ps.ITS, function(x) sum(x > 1) > (0.2*length(x)), TRUE)
+ps.ITS.2in20 #196
+
+ps.ITS.1 = ps_prune(ps.ITS, min.samples = 1, min.reads = 10)
+ps.ITS.1 #removes 1107
+
+ps.ITS.2 = ps_prune(ps.ITS, min.samples = 2, min.reads = 10)
+ps.ITS.2 #removes 10748 - left 3635
+
+#for diversity analyses: do not remove low-prevalent features! save this phyloseq
+ps.ITS.nofilt <- ps_prune(ps.ITS, min.samples = 0, min.reads = 10)
+ps.ITS.nofilt
+
+#choose to keep ASVs with more than 10 reads in at least 2 samples
+ps.ITS <- ps_prune(ps.ITS, min.samples = 2, min.reads = 10)
+ps.ITS
+```
+
+
+e) remove samples with a number of reads that is too low
+https://web.stanford.edu/class/bios221/Pune/Labs/Lab_phyloseq/Phyloseq_Lab.html
+
+1. check number of reads / asv and families per sample
+
+families per sample
+```{r}
+famfac = factor(tax_table(ps.ITS)[, "Family"])
+# Try as before
+famtab = apply(otu_table(ps.ITS), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+observationThreshold = 1
+apply(famtab > observationThreshold, 2, sum)
+```
+
+reads and asv and families per sample - table
+```{r}
+ASV.reads <- as.data.frame (readcount(ps.ITS))
+asv_df <- t(otu_table(ps.ITS))
+ASV.reads$asvcount <- colSums(asv_df != 0)
+ASV.reads$famcount <- colSums(famtab != 0)
+write.csv(ASV.reads, "ITS/reads.asv.families per sample.csv", row.names=TRUE)
+```
+
+per time point T01
+```{r}
+ps.ITS01 <- ps.ITS %>% subset_samples(time.point %in% c("T0","T1"))
+T01.readcount <- as.data.frame (readcount(ps.ITS01))
+asv_df01 <- t(otu_table(ps.ITS01))
+T01.readcount$asvcount <- colSums(asv_df01 != 0)
+
+famfac01 = factor(tax_table(ps.ITS01)[, "family"])
+famtab01 = apply(otu_table(ps.ITS01), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac01, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+
+T01.readcount$famcount <- colSums(famtab01 != 0)
+write.csv(T01.readcount, "ITS/reads.asv.families per sample-T01.csv", row.names=TRUE)
+```
+
+per time point T2
+```{r}
+ps.ITS2 <- ps.ITS %>% subset_samples(time.point == "T2")
+T2.readcount <- as.data.frame (readcount(ps.ITS2))
+asv_df2 <- t(otu_table(ps.ITS2))
+T2.readcount$asvcount <- colSums(asv_df2 != 0)
+
+famfac2 = factor(tax_table(ps.ITS2)[, "family"])
+# Try as before
+famtab2 = apply(otu_table(ps.ITS2), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+
+T2.readcount$famcount <- colSums(famtab2 != 0)
+write.csv(ASV.reads, "ITS/reads.asv.families per sample-T2.csv", row.names=FALSE)
+```
+
+
+per time point T3
+```{r}
+ps.ITS3 <- ps.ITS %>% subset_samples(time.point == "T3")
+T3.readcount <- as.data.frame (readcount(ps.ITS3))
+asv_df3 <- t(otu_table(ps.ITS3))
+T3.readcount$asvcount <- colSums(asv_df3 != 0)
+
+famfac3 = factor(tax_table(ps.ITS3)[, "family"])
+# Try as before
+famtab3 = apply(otu_table(ps.ITS3), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+
+T3.readcount$famcount <- colSums(famtab3 != 0)
+write.csv(ASV.reads, "ITS/reads.asv.families per sample-T3.csv", row.names=FALSE) 
+```
+
+prune and check
+```{r}
+sample_sums(ps.ITS) > 20000 %>% sum
+ps.ITS %>% subset_samples(time.point == "T1") %>% sample_sums > 20000 %>% sum 
+
+ps.ITSpruned1000 <- prune_samples(sample_sums(ps.ITS) > 1000, ps.ITS)
+ps.ITSpruned1000 #685 samples removed 6 samples
+
+ps.ITS.nofilt <- prune_samples(sample_sums(ps.ITS.nofilt) > 1000, ps.ITS.nofilt)
+ps.ITS.nofilt
+
+ps.ITS <- prune_samples(sample_sums(ps.ITS) > 1000, ps.ITS)
+ps.ITS #838 samples removed 6 samples
+```
+
+
+```{r}
+save(ps.ITS, file = 'ps-selected-only-ITS-filt-lowabd-no-neg.RData')
+ps.ITS@sam_data$sample.type
+```
+
+
+```{r}
+library(microbiome)
+write.table(ps.ITS@tax_table@.Data, file = "./ITS/ITS_tax_table.txt", sep = "\t")
+write.table(ps.ITS@sam_data@.Data, file = "./ITS/ITS_metadata_table.txt", sep = "\t")
+write.table(ps.ITS@otu_table@.Data, file = "./ITS/ITS_otu_table.txt", sep = "\t")
+
+#write_phyloseq(physeq.fungi, type = "OTU", path = "./")
+#write_phyloseq(ps.ITS, type = "METADATA", path = "./ITS/")
+```
+
+
+Check read counts 
+
+```{r}
+reads_sample <- as.data.frame (readcount(ps.ITS))
+sum(readcount(ps.ITS)) #162300940
+summary(readcount(ps.ITS))
+
+summary (readcount(subset_samples(ps.ITS, time.point %in% c("T0", "T1"))))
+sum (readcount(subset_samples(ps.ITS, time.point %in% c("T0", "T1"))))
+ps.ITS01 <- ps.ITS %>% subset_samples(time.point %in% c("T0", "T1"))
+ps.ITS.t01 = prune_taxa(taxa_sums(ps.ITS01) > 0, ps.ITS01)
+ps.ITS.t01
+
+
+#DNA vs RNA
+ps.ITS01.dna <- ps.ITS %>% subset_samples(time.point %in% c("T0", "T1")& nucleic.acid == "DNA")
+ps.ITS01.dna = prune_taxa(taxa_sums(ps.ITS01.dna) > 0, ps.ITS01.dna)
+ps.ITS01.dna
+ASV.reads.ps.ITS01.dna <- as.data.frame (readcount(ps.ITS01.dna))
+asv_df.ps.ITS01.dna <- t(otu_table(ps.ITS01.dna))
+ASV.reads.ps.ITS01.dna$asvcount <- colSums(asv_df.ps.ITS01.dna != 0)
+summary (ASV.reads.ps.ITS01.dna)
+sum (ASV.reads.ps.ITS01.dna$`readcount(ps.ITS01.dna)`)
+
+
+ps.ITS01.rna <- ps.ITS %>% subset_samples(time.point %in% c("T0", "T1")& nucleic.acid == "RNA")
+ps.ITS01.rna = prune_taxa(taxa_sums(ps.ITS01.rna) > 0, ps.ITS01.rna)
+ps.ITS01.rna
+ASV.reads.ps.ITS01.rna <- as.data.frame (readcount(ps.ITS01.rna))
+asv_df.ps.ITS01.rna <- t(otu_table(ps.ITS01.rna))
+ASV.reads.ps.ITS01.rna$asvcount <- colSums(asv_df.ps.ITS01.rna != 0)
+summary (ASV.reads.ps.ITS01.rna)
+sum (ASV.reads.ps.ITS01.rna$`readcount(ps.ITS01.rna)`)
+```
+
+
+```{r}
+summary (readcount(subset_samples(ps.ITS, time.point=="T2")))
+sum (readcount(subset_samples(ps.ITS, time.point=="T2")))
+ps.ITS.2 <- ps.ITS %>% subset_samples(time.point == "T2")
+ps.ITS.2 = prune_taxa(taxa_sums(ps.ITS.2) > 0, ps.ITS.2)
+ps.ITS.2
+
+#DNA vs RNA
+ps.ITS2.dna <- ps.ITS %>% subset_samples(time.point == "T2" & nucleic.acid == "DNA")
+ps.ITS2.dna = prune_taxa(taxa_sums(ps.ITS2.dna) > 0, ps.ITS2.dna)
+ps.ITS2.dna
+ASV.reads.ps.ITS2.dna <- as.data.frame (readcount(ps.ITS2.dna))
+asv_df.ps.ITS2.dna <- t(otu_table(ps.ITS2.dna))
+ASV.reads.ps.ITS2.dna$asvcount <- colSums(asv_df.ps.ITS2.dna != 0)
+summary (ASV.reads.ps.ITS2.dna)
+sum (ASV.reads.ps.ITS2.dna$`readcount(ps.ITS2.dna)`)
+
+
+ps.ITS2.rna <- ps.ITS %>% subset_samples(time.point == "T2" & nucleic.acid == "RNA")
+ps.ITS2.rna = prune_taxa(taxa_sums(ps.ITS2.rna) > 0, ps.ITS2.rna)
+ps.ITS2.rna
+ASV.reads.ps.ITS2.rna <- as.data.frame (readcount(ps.ITS2.rna))
+asv_df.ps.ITS2.rna <- t(otu_table(ps.ITS2.rna))
+ASV.reads.ps.ITS2.rna$asvcount <- colSums(asv_df.ps.ITS2.rna != 0)
+summary (ASV.reads.ps.ITS2.rna)
+sum (ASV.reads.ps.ITS2.rna$`readcount(ps.ITS2.rna)`)
+
+```
+
+```{r}
+summary (readcount(subset_samples(ps.ITS, time.point=="T3")))
+sum (readcount(subset_samples(ps.ITS, time.point=="T3")))
+ps.ITS.3 <- ps.ITS %>% subset_samples(time.point == "T3")
+ps.ITS.3 = prune_taxa(taxa_sums(ps.ITS.3) > 0, ps.ITS.3)
+ps.ITS.3
+
+#DNA vs RNA
+ps.ITS3.dna <- ps.ITS %>% subset_samples(time.point == "T3" & nucleic.acid == "DNA")
+ps.ITS3.dna = prune_taxa(taxa_sums(ps.ITS3.dna) > 0, ps.ITS3.dna)
+ps.ITS3.dna
+ASV.reads.ps.ITS3.dna <- as.data.frame (readcount(ps.ITS3.dna))
+asv_df.ps.ITS3.dna <- t(otu_table(ps.ITS3.dna))
+ASV.reads.ps.ITS3.dna$asvcount <- colSums(asv_df.ps.ITS3.dna != 0)
+summary (ASV.reads.ps.ITS3.dna)
+sum (ASV.reads.ps.ITS3.dna$`readcount(ps.ITS3.dna)`)
+
+
+ps.ITS3.rna <- ps.ITS %>% subset_samples(time.point == "T3" & nucleic.acid == "RNA")
+ps.ITS3.rna = prune_taxa(taxa_sums(ps.ITS3.rna) > 0, ps.ITS3.rna)
+ps.ITS3.rna
+ASV.reads.ps.ITS3.rna <- as.data.frame (readcount(ps.ITS3.rna))
+asv_df.ps.ITS3.rna <- t(otu_table(ps.ITS3.rna))
+ASV.reads.ps.ITS3.rna$asvcount <- colSums(asv_df.ps.ITS3.rna != 0)
+summary (ASV.reads.ps.ITS3.rna)
+sum (ASV.reads.ps.ITS3.rna$`readcount(ps.ITS3.rna)`)
+```
+
+
+# remove reps
+```{r}
+ps.ITS.t01@sam_data$cc.row
+#no reps
+```
+
+```{r}
+ps.ITS.2.reps <- subset_samples (ps.ITS.2, cc.row %in% c("JT33", "JT33rep", "B17", "B17rep"))
+ASV.reads.t2rep <- as.data.frame (readcount(ps.ITS.2.reps))
+#B17-RNA-T2-plt1 has lower reads than B17rep-RNA-T2-plt1
+#Keep B17rep and JT33
+```
+
+```{r}
+ps.ITS.3@sam_data$cc.row
+ps.ITS.3.reps <- subset_samples (ps.ITS.3, cc.row %in% c("J36", "J36rep", "JT34rep", "JT34"))
+ASV.reads.t3rep <- as.data.frame (readcount(ps.ITS.3.reps))
+#J36 RNA was filtered out, so keep the reps
+#Keep J36 rep and JT34
+```
+
+```{r}
+#remove worst samples from ps.ITS
+ps.ITS <- subset_samples (ps.ITS, sample_names(ps.ITS) != "J36-DNA-T3-plt2" & 
+                             sample_names(ps.ITS) != "JT34rep-DNA-T3-plt2" & 
+                             sample_names(ps.ITS) != "JT34rep-RNA-T3-plt2" & 
+                             sample_names(ps.ITS) != "B17rep-DNA-T2-plt1"& 
+                             sample_names(ps.ITS) != "B17-RNA-T2-plt1" & 
+                             sample_names(ps.ITS) != "JT33rep-DNA-T2-plt2"& 
+                             sample_names(ps.ITS) != "JT33rep-RNA-T2-plt2")
+save(ps.ITS, file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
+#831 samples
+```
+
+For unfiltered taxa do the same : remove replicates
+```{r}
+#remove worst samples from ps.ITS
+ps.ITS.nofilt <- subset_samples (ps.ITS.nofilt, sample_names(ps.ITS.nofilt) != "J36-DNA-T3-plt2" & 
+                             sample_names(ps.ITS.nofilt) != "JT34rep-DNA-T3-plt2" & 
+                             sample_names(ps.ITS.nofilt) != "JT34rep-RNA-T3-plt2" & 
+                             sample_names(ps.ITS.nofilt) != "B17rep-DNA-T2-plt1"& 
+                             sample_names(ps.ITS.nofilt) != "B17-RNA-T2-plt1" & 
+                             sample_names(ps.ITS.nofilt) != "JT33rep-DNA-T2-plt2"& 
+                             sample_names(ps.ITS.nofilt) != "JT33rep-RNA-T2-plt2")
+save(ps.ITS.nofilt, file = './ITS/ps-selected-only-ITS-nofilt-noneg-norep.RData')
+```
+
