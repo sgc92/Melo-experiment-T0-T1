@@ -1,0 +1,451 @@
+---
+title: "R Notebook"
+editor_options:
+  chunk_output_type: console
+---
+https://web.stanford.edu/class/bios221/Pune/Labs/Lab_phyloseq/Phyloseq_Lab.html#bonus_material_:-) =abundance etc
+
+```{r}
+library(dplyr)
+library(phyloseq)
+library(metagenomeSeq)
+library(vegan)
+library (ranacapa)
+library(microbiome)
+library(metagMisc)
+#library(xlsx)
+library(devtools)
+library(MicEco)
+```
+
+```{r}
+load ("./Bacteria/Bacteria_phy.RData")
+load ("./Bacteria/Bacteria_phy_updated_taxa.RData")
+bacteria_phy
+sample_names_bact <- sample_names(bacteria_phy)
+data <- read.csv("./Bacteria/metadata_DNA-RNA - CorrMc-final.csv", sep =';', row.names = 1)
+sample_data(bacteria_phy) <- sample_data(data) #update metadata with corrected mc
+```
+
+1.check reads count 
+
+```{r}
+reads_sample <- as.data.frame (readcount(bacteria_phy))
+sum(readcount(bacteria_phy)) #162300940
+summary(readcount(bacteria_phy))
+
+summary (readcount(subset_samples(bacteria_phy, time.point %in% c("T0", "T1"))))
+sum (readcount(subset_samples(bacteria_phy, time.point %in% c("T0", "T1"))))
+
+summary (readcount(subset_samples(bacteria_phy, time.point=="T2")))
+sum (readcount(subset_samples(bacteria_phy, time.point=="T2")))
+
+summary (readcount(subset_samples(bacteria_phy, time.point=="T3")))
+sum (readcount(subset_samples(bacteria_phy, time.point=="T3")))
+```
+
+2. check taxonomy
+```{r}
+rank_names(bacteria_phy)
+colnames(tax_table(bacteria_phy)) <- c("Kingdom", "Phylum", "Class", "Order", "Family",  "Genus", "Species")
+taxonomy <- bacteria_phy@tax_table@.Data
+get_taxa_unique(bacteria_phy, taxonomic.rank = "Kingdom")
+get_taxa_unique(bacteria_phy, taxonomic.rank = "Phylum")
+
+bacteria_phy #142656
+table(tax_table(bacteria_phy)[, "Phylum"], exclude = NULL)
+
+ps.bact <- subset_taxa(bacteria_phy, Kingdom == "Bacteria")
+ps.bact
+
+save(ps.bact, file = './Bacteria/ps-selected-only-bact2.RData') #bact2 for nex added bact physeq with extra species
+```
+
+3. filtering
+
+```{r}
+load(file = './bact/ps-selected-only-bact2.RData')
+```
+
+a) remove contaminants - no for fungi
+```{r}
+library(decontam)
+df <- as.data.frame(sample_data(ps.bact)) # Put sample_data into a ggplot-friendly data.frame
+df$LibrarySize <- sample_sums(ps.bact)
+df <- df[order(df$LibrarySize),]
+df$Index <- seq(nrow(df))
+ggplot(data=df, aes(x=Index, y=LibrarySize, color=sample.type)) + geom_point()
+```
+
+```{r}
+library(decontam)
+sample_data(ps.bact)$is.neg <- sample_data(ps.bact)$sample.type == "NEG"
+contamdf.prev01 <- isContaminant(ps.bact, 
+                                 method="prevalence", neg="is.neg",
+                                 batch = sample_data(ps.bact)$time.point ,
+                                 threshold=0.1)
+table(contamdf.prev01$contaminant)
+#FALSE  TRUE 
+#91514  1596
+
+head(which(contamdf.prev01$contaminant))
+#12 19 43 47 49 61
+```
+
+```{r}
+ps.contam <- prune_taxa(contamdf.prev01$contaminant, ps.bact)
+ps.contam
+plot_bar(ps.contam, x = "sample.type", y = "Abundance") + #fill = "genus"
+  facet_wrap(. ~ Phylum)
+
+check_taxa <- subset_taxa(ps.bact, Phylum == "Proteobacteria") #Pasteurellaceae #Oxalofunteraceae #Pseudomonadaceae
+plot_bar(check_taxa, x = "sample.type", y = "Abundance", fill = "Genus")
+
+ps.bact1 <- prune_taxa(!contamdf.prev01$contaminant, ps.bact)
+ps.bact1
+```
+
+```{r}
+ps.pa <- transform_sample_counts(ps.bact, function(abund) 1*(abund>0))
+ps.pa.neg <- prune_samples(sample_data(ps.pa)$sample.type == "NEG", ps.pa)
+ps.pa.pos <- prune_samples(sample_data(ps.pa)$sample.type == "rhizo" | sample_data(ps.pa)$sample.type == "bulk", ps.pa)
+# Make data.frame of prevalence in positive and negative samples
+df.pa <- data.frame(pa.pos=taxa_sums(ps.pa.pos),
+                    pa.neg=taxa_sums(ps.pa.neg),
+                    contaminant=contamdf.prev01$contaminant)
+ggplot(data=df.pa, aes(x=pa.neg, y=pa.pos, color=contaminant)) + geom_point() +
+  xlab("Prevalence (Negative Controls)") + ylab("Prevalence (True Samples)")
+```
+
+```{r}
+ps.bact <- prune_taxa(!contamdf.prev01$contaminant, ps.bact)
+```
+
+b)
+## remove negatives 
+
+```{r}
+ps.bact.neg <- subset_samples(ps.bact, sample.type == "NEG" ) #6 samples
+save (ps.bact.neg, file= "./Bacteria/negative_samples_bact.Rdata")
+
+ps.bact <- subset_samples(ps.bact, !sample.type == "NEG") 
+ps.bact #844 samples
+sample_names((ps.bact))
+ps.bact@sam_data$cc
+```
+
+c)remove low counts etc
+
+c1)
+
+https://www.bioconductor.org/packages/devel/bioc/vignettes/phyloseq/inst/doc/phyloseq-analysis.html
+
+###NO
+1. PREVALENCE - explore feature prevalence in the dataset, which we will define here as the number of samples in which a taxa appears at least once.
+```{r}
+# Compute prevalence of each feature, store as data.frame
+prevdf = apply(X = otu_table(ps.bact),
+                 MARGIN = ifelse(taxa_are_rows(ps.bact), yes = 1, no = 2),
+                 FUN = function(x){sum(x > 0)})
+# Add taxonomy and total read counts to this data.frame
+prevdf = data.frame(Prevalence = prevdf,
+                      TotalAbundance = taxa_sums(ps.bact),
+                      tax_table(ps.bact))
+plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
+
+
+```
+
+```{r}
+#remove phyla that are NA
+ps.bact <-subset_taxa(ps.bact, !is.na(Phylum)& !Phylum%in% c("","uncharacterized"))
+```
+
+
+c2)
+```{r remove singletons}
+length(which(taxa_sums(ps.bact) <= 1)) #113 how many singletons
+length(which(taxa_sums(ps.bact) <= 2)) #1638 singletons and doubletons
+round((1638/93110)*100, digits = 2) #1.76 singletons
+
+
+ps.singletons <-prune_taxa(taxa_sums(ps.bact) <= 1, ps.bact)
+summarize_phyloseq(ps.singletons) #zero singletons - min 0, max 1
+table(tax_table(ps.singletons)[, "Family"], exclude = NULL)
+otu_singletons <- as.data.frame(ps.singletons@otu_table)
+write.csv(otu_singletons, "./Bacteria/otu_table_singletons.csv", row.names=FALSE)
+save(ps.singletons, file = './Bacteria/psonlybactsingletons.RData')
+
+ps.nosingletons <- prune_taxa(taxa_sums(ps.bact) > 1, ps.bact)
+summarize_phyloseq(ps.nosingletons)
+length(which(taxa_sums(ps.nosingletons) <= 1))
+ps.nosingletons
+ps.bact
+
+#do on the actual ps.bact
+ps.bact <- prune_taxa(taxa_sums(ps.bact) > 1, ps.bact)
+ps.bact
+```
+
+c3) remove taxa that were only observed 1 time in the whole dataset
+```{r}
+(taxa_sums(ps.bact) > 1) %>% sum
+
+ps.bact.2 = ps_prune(ps.bact, min.samples = 2, min.reads = 50)
+ps.bact.2 #removes 30 000
+
+ASV.reads <- as.data.frame (readcount(ps.bact.2))
+asv_df <- t(otu_table(ps.bact.2))
+ASV.reads$asvcount <- colSums(asv_df != 0)
+otu_2 <- as.data.frame(otu_table(ps.bact.2))
+
+#choose to keep ASVs with more than 10 reads in at least 2 samples
+ps.bact <- ps_prune(ps.bact, min.samples = 2, min.reads = 10)
+ps.bact #6435 features are rare
+```
+
+
+e) remove samples with a number of reads that is too low
+https://web.stanford.edu/class/bios221/Pune/Labs/Lab_phyloseq/Phyloseq_Lab.html
+
+1. check number of reads / asv and families per sample
+
+families per sample
+```{r}
+famfac = factor(tax_table(ps.bact)[, "Family"])
+# Try as before
+famtab = apply(otu_table(ps.bact), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+observationThreshold = 1
+apply(famtab > observationThreshold, 2, sum)
+```
+
+reads and asv and families per sample - table
+```{r}
+ASV.reads <- as.data.frame (readcount(ps.bact))
+asv_df <- t(otu_table(ps.bact))
+ASV.reads$asvcount <- colSums(asv_df != 0)
+ASV.reads$famcount <- colSums(famtab != 0)
+write.csv(ASV.reads, "./Bacteria/reads.asv.families per sample.csv", row.names=TRUE)
+```
+
+per time point T01
+```{r}
+ps.bact01 <- ps.bact %>% subset_samples(time.point %in% c("T0","T1"))
+T01.readcount <- as.data.frame (readcount(ps.bact01))
+asv_df01 <- t(otu_table(ps.bact01))
+T01.readcount$asvcount <- colSums(asv_df01 != 0)
+
+famfac01 = factor(tax_table(ps.bact01)[, "Family"])
+famtab01 = apply(otu_table(ps.bact01), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac01, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+
+T01.readcount$famcount <- colSums(famtab01 != 0)
+write.csv(T01.readcount, "./Bacteria/reads.asv.families per sample-T01.csv", row.names=TRUE)
+```
+
+per time point T2
+```{r}
+ps.bact2 <- ps.bact %>% subset_samples(time.point == "T2")
+T2.readcount <- as.data.frame (readcount(ps.bact2))
+asv_df2 <- t(otu_table(ps.bact2))
+T2.readcount$asvcount <- colSums(asv_df2 != 0)
+
+famfac2 = factor(tax_table(ps.bact2)[, "Family"])
+# Try as before
+famtab2 = apply(otu_table(ps.bact2), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+
+T2.readcount$famcount <- colSums(famtab2 != 0)
+write.csv(ASV.reads, "./Bacteria/reads.asv.families per sample-T2.csv", row.names=FALSE)
+```
+
+
+per time point T3
+```{r}
+ps.bact3 <- ps.bact %>% subset_samples(time.point == "T3")
+T3.readcount <- as.data.frame (readcount(ps.bact3))
+asv_df3 <- t(otu_table(ps.bact3))
+T3.readcount$asvcount <- colSums(asv_df3 != 0)
+
+famfac3 = factor(tax_table(ps.bact3)[, "Family"])
+# Try as before
+famtab3 = apply(otu_table(ps.bact3), MARGIN = 1, function(x) {
+    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
+
+T3.readcount$famcount <- colSums(famtab3 != 0)
+write.csv(ASV.reads, "./Bacteria/reads.asv.families per sample-T3.csv", row.names=FALSE) 
+```
+
+prune and check
+```{r}
+sample_sums(ps.bact) > 20000 %>% sum
+ps.bact %>% subset_samples(time.point == "T1") %>% sample_sums > 20000 %>% sum 
+
+ps.bactpruned10000 <- prune_samples(sample_sums(ps.bact) > 10000, ps.bact)
+ps.bactpruned10000 #685 samples removed 6 samples
+
+ps.bact <- prune_samples(sample_sums(ps.bact) > 10000, ps.bact)
+ps.bact #685 samples removed 5 samples
+```
+
+
+```{r}
+save(ps.bact, file = 'ps-selected-only-bact-filt-lowabd-no-neg2.RData')
+ps.bact@sam_data$sample.type
+```
+
+
+```{r}
+library(microbiome)
+write.table(ps.bact@tax_table@.Data, file = "./Bacteria/bact_tax_table.txt", sep = "\t")
+write.table(ps.bact@sam_data@.Data, file = "./Bacteria/bact_metadata_table.txt", sep = "\t")
+write.table(ps.bact@otu_table@.Data, file = "./Bacteria/bact_otu_table.txt", sep = "\t")
+
+#write_phyloseq(physeq.fungi, type = "OTU", path = "./")
+#write_phyloseq(ps.bact, type = "METADATA", path = "./bact/")
+```
+
+
+##Read counts: 
+
+```{r}
+load(file = 'ps-selected-only-bact-filt-lowabd-no-neg2.RData')
+```
+
+# remove reps
+```{r}
+ps.bact01 <- ps.bact %>% subset_samples(time.point %in% c("T0", "T1"))
+ps.bact.t01 = prune_taxa(taxa_sums(ps.bact01) > 0, ps.bact01)
+ps.bact.t01
+
+ps.bact.t01@sam_data$cc.row
+#no reps
+```
+
+```{r}
+ps.bact.2 <- ps.bact %>% subset_samples(time.point == "T2")
+ps.bact.2 = prune_taxa(taxa_sums(ps.bact.2) > 0, ps.bact.2)
+ps.bact.2
+
+ps.bact.2.reps <- subset_samples (ps.bact.2, cc.row %in% c("JT33", "JT33rep", "B17", "B17rep"))
+ASV.reads.t2rep <- as.data.frame (readcount(ps.bact.2.reps))
+```
+
+```{r}
+ps.bact.3 <- ps.bact %>% subset_samples(time.point == "T3")
+ps.bact.3 = prune_taxa(taxa_sums(ps.bact.3) > 0, ps.bact.3)
+ps.bact.3
+
+ps.bact.3@sam_data$cc.row
+ps.bact.3.reps <- subset_samples (ps.bact.3, cc.row %in% c("J36", "J36rep", "JT34rep", "JT34"))
+ASV.reads.t3rep <- as.data.frame (readcount(ps.bact.3.reps))
+```
+
+```{r}
+#remove worst samples from ps.bact
+ps.bact <- subset_samples (ps.bact, sample_names(ps.bact) != "B17-DNA-T2-plt1" & 
+                             sample_names(ps.bact) != "B17-RNA-T2-plt1" & 
+                             sample_names(ps.bact) != "JT33-DNA-T2-plt2" & 
+                             sample_names(ps.bact) != "JT33-RNA-T2-plt2"& 
+                             sample_names(ps.bact) != "J36rep-DNA-T3-plt2" & 
+                             sample_names(ps.bact) != "J36rep-RNA-T3-plt2"& 
+                             sample_names(ps.bact) != "JT34rep-DNA-T3-plt2" & 
+                             sample_names(ps.bact) != "JT34-RNA-T3-plt2")
+
+save(ps.bact, file = 'ps-selected-only-bact-filt-lowabd-no-neg-norep2.RData')
+```
+
+
+
+Read count 
+```{r}
+reads_sample <- as.data.frame (readcount(ps.bact))
+sum(readcount(ps.bact)) #162300940
+summary(readcount(ps.bact))
+
+summary (readcount(subset_samples(ps.bact, time.point %in% c("T0", "T1"))))
+sum (readcount(subset_samples(ps.bact, time.point %in% c("T0", "T1"))))
+ps.bact01 <- ps.bact %>% subset_samples(time.point %in% c("T0", "T1"))
+ps.bact.t01 = prune_taxa(taxa_sums(ps.bact01) > 0, ps.bact01)
+ps.bact.t01
+
+
+#DNA vs RNA
+ps.bact01.dna <- ps.bact %>% subset_samples(time.point %in% c("T0", "T1")& nucleic.acid == "DNA")
+ps.bact01.dna = prune_taxa(taxa_sums(ps.bact01.dna) > 0, ps.bact01.dna)
+ps.bact01.dna
+ASV.reads.ps.bact01.dna <- as.data.frame (readcount(ps.bact01.dna))
+asv_df.ps.bact01.dna <- t(otu_table(ps.bact01.dna))
+ASV.reads.ps.bact01.dna$asvcount <- colSums(asv_df.ps.bact01.dna != 0)
+summary (ASV.reads.ps.bact01.dna)
+sum (ASV.reads.ps.bact01.dna$`readcount(ps.bact01.dna)`)
+
+
+ps.bact01.rna <- ps.bact %>% subset_samples(time.point %in% c("T0", "T1")& nucleic.acid == "RNA")
+ps.bact01.rna = prune_taxa(taxa_sums(ps.bact01.rna) > 0, ps.bact01.rna)
+ps.bact01.rna
+ASV.reads.ps.bact01.rna <- as.data.frame (readcount(ps.bact01.rna))
+asv_df.ps.bact01.rna <- t(otu_table(ps.bact01.rna))
+ASV.reads.ps.bact01.rna$asvcount <- colSums(asv_df.ps.bact01.rna != 0)
+summary (ASV.reads.ps.bact01.rna)
+sum (ASV.reads.ps.bact01.rna$`readcount(ps.bact01.rna)`)
+```
+
+
+```{r}
+summary (readcount(subset_samples(ps.bact, time.point=="T2")))
+sum (readcount(subset_samples(ps.bact, time.point=="T2")))
+ps.bact.2 <- ps.bact %>% subset_samples(time.point == "T2")
+ps.bact.2 = prune_taxa(taxa_sums(ps.bact.2) > 0, ps.bact.2)
+ps.bact.2
+
+#DNA vs RNA
+ps.bact2.dna <- ps.bact %>% subset_samples(time.point == "T2" & nucleic.acid == "DNA")
+ps.bact2.dna = prune_taxa(taxa_sums(ps.bact2.dna) > 0, ps.bact2.dna)
+ps.bact2.dna
+ASV.reads.ps.bact2.dna <- as.data.frame (readcount(ps.bact2.dna))
+asv_df.ps.bact2.dna <- t(otu_table(ps.bact2.dna))
+ASV.reads.ps.bact2.dna$asvcount <- colSums(asv_df.ps.bact2.dna != 0)
+summary (ASV.reads.ps.bact2.dna)
+sum (ASV.reads.ps.bact2.dna$`readcount(ps.bact2.dna)`)
+
+
+ps.bact2.rna <- ps.bact %>% subset_samples(time.point == "T2" & nucleic.acid == "RNA")
+ps.bact2.rna = prune_taxa(taxa_sums(ps.bact2.rna) > 0, ps.bact2.rna)
+ps.bact2.rna
+ASV.reads.ps.bact2.rna <- as.data.frame (readcount(ps.bact2.rna))
+asv_df.ps.bact2.rna <- t(otu_table(ps.bact2.rna))
+ASV.reads.ps.bact2.rna$asvcount <- colSums(asv_df.ps.bact2.rna != 0)
+summary (ASV.reads.ps.bact2.rna)
+sum (ASV.reads.ps.bact2.rna$`readcount(ps.bact2.rna)`)
+
+```
+
+```{r}
+summary (readcount(subset_samples(ps.bact, time.point=="T3")))
+sum (readcount(subset_samples(ps.bact, time.point=="T3")))
+ps.bact.3 <- ps.bact %>% subset_samples(time.point == "T3")
+ps.bact.3 = prune_taxa(taxa_sums(ps.bact.3) > 0, ps.bact.3)
+ps.bact.3
+
+#DNA vs RNA
+ps.bact3.dna <- ps.bact %>% subset_samples(time.point == "T3" & nucleic.acid == "DNA")
+ps.bact3.dna = prune_taxa(taxa_sums(ps.bact3.dna) > 0, ps.bact3.dna)
+ps.bact3.dna
+ASV.reads.ps.bact3.dna <- as.data.frame (readcount(ps.bact3.dna))
+asv_df.ps.bact3.dna <- t(otu_table(ps.bact3.dna))
+ASV.reads.ps.bact3.dna$asvcount <- colSums(asv_df.ps.bact3.dna != 0)
+summary (ASV.reads.ps.bact3.dna)
+sum (ASV.reads.ps.bact3.dna$`readcount(ps.bact3.dna)`)
+
+
+ps.bact3.rna <- ps.bact %>% subset_samples(time.point == "T3" & nucleic.acid == "RNA")
+ps.bact3.rna = prune_taxa(taxa_sums(ps.bact3.rna) > 0, ps.bact3.rna)
+ps.bact3.rna
+ASV.reads.ps.bact3.rna <- as.data.frame (readcount(ps.bact3.rna))
+asv_df.ps.bact3.rna <- t(otu_table(ps.bact3.rna))
+ASV.reads.ps.bact3.rna$asvcount <- colSums(asv_df.ps.bact3.rna != 0)
+summary (ASV.reads.ps.bact3.rna)
+sum (ASV.reads.ps.bact3.rna$`readcount(ps.bact3.rna)`)
+```
