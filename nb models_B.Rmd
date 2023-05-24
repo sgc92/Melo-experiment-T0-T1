@@ -1,0 +1,2405 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+library(DHARMa)
+library(dplyr)
+library(phyloseq)
+library(ggpubr)
+library(microbiome)
+library(tidyr)
+library(forcats)
+library(RColorBrewer)
+library(vegan)
+library(forcats)
+library(glmmTMB)
+library(emmeans)
+library(multcomp)
+library(lme4)
+#library (ggcheck)
+library(data.table)
+library(microbiome)
+
+```
+
+########################################################################################################################
+Correlation antagonists with nematode count
+
+```{r}
+load (file = 'ps-selected-only-bact-filt-lowabd-no-neg-norep2.RData')
+ps.bact.dna.t0 <- subset_samples(ps.bact, nucleic.acid == "DNA"  & time.point == "T0" & sample.type == "rhizo")
+ps.bact.rna.t0 <- subset_samples(ps.bact, nucleic.acid == "RNA"  & time.point == "T0" & sample.type == "rhizo")
+ps.bact.dna.t0@sam_data$readcount.tot <- microbiome::readcount(ps.bact.dna.t0)
+ps.bact.rna.t0@sam_data$readcount.tot <-  microbiome::readcount(ps.bact.rna.t0)
+
+ant.bact.dna.t0.gen <- subset_taxa(ps.bact.dna.t0, Genus %in% c("Pseudomonas", "Bacillus", "Pasteuria", "Lysobacter", "Rhizobium", "Variovorax", "Serratia"))
+ant.bact.rna.t0.gen <- subset_taxa(ps.bact.rna.t0, Genus %in% c("Pseudomonas", "Bacillus", "Pasteuria", "Lysobacter", "Rhizobium", "Variovorax", "Serratia"))
+```
+
+```{r}
+#DNA
+ant.gen.dna.t0 <- subset_taxa(ant.bact.dna.t0.gen, Family %in% c("Bacillaceae", "Rhizobiaceae", "Comamonadaceae", "Pseudomonadaceae", "Xanthomonadaceae"))
+
+ant.gen.dna.t0.s <- microbiome::aggregate_taxa(ant.gen.dna.t0, "Genus")
+samdf.gen.dna.t0.s <-as.data.frame(sample_data (ant.gen.dna.t0.s))
+otu.gen.dna.t0.s <- as.data.frame (t(otu_table(ant.gen.dna.t0.s)))
+tax.gen.dna.t0.s <- as.data.frame(tax_table(ant.gen.dna.t0.s))
+
+samdf.gen.dna.t0.s$readcount <- rowSums(otu.gen.dna.t0.s[1:5])
+
+data.gen.dna.t0.s <- merge (samdf.gen.dna.t0.s, otu.gen.dna.t0.s,  by = 'row.names')
+colnames(data.gen.dna.t0.s)
+
+data.gen.dna.t0.s$pre.crop <- as.factor(data.gen.dna.t0.s$pre.crop)
+
+#"Bacillus" "Rhizobium"    "Variovorax"   "Pseudomonas"  "Lysobacter"
+```
+
+```{r}
+#RNA
+ant.gen.rna.t0 <- subset_taxa(ant.bact.rna.t0.gen, Family %in% c("Bacillaceae", "Rhizobiaceae", "Comamonadaceae", "Pseudomonadaceae", "Xanthomonadaceae"))
+
+ant.gen.rna.t0.s <- microbiome::aggregate_taxa(ant.gen.rna.t0, "Genus")
+samdf.gen.rna.t0.s <-as.data.frame(sample_data (ant.gen.rna.t0.s))
+otu.gen.rna.t0.s <- as.data.frame (t(otu_table(ant.gen.rna.t0.s)))
+tax.gen.rna.t0.s <- as.data.frame(tax_table(ant.gen.rna.t0.s))
+samdf.gen.rna.t0.s$readcount <- rowSums(otu.gen.rna.t0.s[1:5])
+
+data.gen.rna.t0.s <- merge (samdf.gen.rna.t0.s, otu.gen.rna.t0.s,  by = 'row.names')
+colnames(data.gen.rna.t0.s)
+
+colnames(data.gen.rna.t0.s)
+data.gen.rna.t0.s$pre.crop <- as.factor(data.gen.rna.t0.s$pre.crop)
+#"Bacillus" "Rhizobium"    "Variovorax"   "Pseudomonas"  "Lysobacter"
+
+data.gen.dna.t0.s$pre.crop <- forcats::fct_relevel(data.gen.dna.t0.s$pre.crop, "er", "ir", "ry", "bo")
+data.gen.rna.t0.s$pre.crop <- forcats::fct_relevel(data.gen.rna.t0.s$pre.crop, "er", "ir", "ry", "bo")
+```
+
+
+#plots
+```{r}
+data.gen.dna.t0.s.long <- data.gen.dna.t0.s %>% 
+  tidyr::pivot_longer(cols = Bacillus:Lysobacter, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+              mutate (Rel.abundance.DNA = (Abundance/readcount.tot)) 
+data.gen.dna.t0.s.long$pre.crop <- forcats::fct_relevel(data.gen.dna.t0.s.long$pre.crop, "bo", "ry", "ir", "er" )
+  
+data.gen.rna.t0.s.long <- data.gen.rna.t0.s %>% 
+  tidyr::pivot_longer(cols = Bacillus:Lysobacter, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+  mutate (Rel.abundance.RNA = (Abundance/readcount.tot)) 
+data.gen.rna.t0.s.long$pre.crop <- forcats::fct_relevel(data.gen.rna.t0.s.long$pre.crop, "bo", "ry", "ir", "er" )
+
+#horizontal 
+colorCode <- c(bo = "#D55E00", ry = "#E69F00", ir = "#F0E442",  er = "#009E73")
+
+plot.ant.bact.dna.t0h<- data.gen.dna.t0.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.DNA, x =pre.crop, fill = pre.crop))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                        scale_y_continuous(limits = c(0,0.015), labels = scales::percent)+
+                        scale_fill_manual(values = colorCode)+
+                        labs(title = "Relative abundance of bacterial antaginists in DNA", y = "Relative abundance")+
+                        facet_wrap(vars(Genus), scales = "fixed", strip.position = "top", nrow = 1)+
+   theme_classic()+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_text(angle = 90, size = 10)),
+        strip.text.x = element_text(size = 8))
+plot.ant.bact.dna.t0h
+
+plot.ant.bact.rna.t0h<- data.gen.rna.t0.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.RNA, x =pre.crop, fill = pre.crop))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                        scale_y_continuous(limits = c(0,0.015), labels = scales::percent)+
+                        scale_fill_manual(values = colorCode)+
+                        labs(title = "Relative abundance of bacterial antaginists in RNA", y = "Relative abundance ")+
+                        facet_wrap(vars(Genus), scales = "fixed", strip.position = "top", nrow = 1)+
+   theme_classic()+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_text(angle = 90, size = 10)),
+        strip.text.x = element_text(size = 8))
+plot.ant.bact.rna.t0h
+
+library(cowplot)
+#ant.t0 <- plot_grid(plot.ant.bact.dna.t0h, 
+#                    plot.ant.bact.rna.t0h,
+#                    align = "hv",
+#                    ncol = 1)
+#ant.t0 
+
+```
+
+
+```{r}
+library(cowplot)
+ant.t0.double.dna <- plot_grid( plot.comp.dna,
+                            plot.ant.bact.dna.t0h,
+                            align = "hv",
+                            ncol = 2,
+                            rel_widths = c(0.5,1),
+                            scale = 1)
+ant.t0.double.dna
+
+ant.t0.double.rna <- plot_grid( plot.comp.rna,
+                            plot.ant.bact.rna.t0h,
+                            align = "hv",
+                            ncol = 2,
+                            rel_widths = c(0.5,1),
+                            scale = 1)
+ant.t0.double.rna
+
+ant.t0.four <- plot_grid(ant.t0.double.dna,
+                         ant.t0.double.rna,
+                         align = "hv",
+                         nrow = 2,
+                         rel_widths = c(0.5,1),
+                          scale = 1)
+ant.t0.four
+```
+
+
+for understanding output look at https://www.middleprofessor.com/files/applied-biostatistics_bookdown/_book/counts.html
+reference : Negative binomial mixed models for analyzing microbiome count data, Zhang et al , 2017, https://doi.org/10.1186/s12859-016-1441-7
+
+https://github.com/nyiuab/NBZIMM
+
+Bacillus
+```{r}
+#######with glmtmb
+hist(data.gen.dna.t0.s$Bacillus)
+boxplot(data.gen.dna.t0.s$Bacillus ~ data.gen.dna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.dna.t0.s$Bacillus)
+library(vcd)
+distplot(data.gen.dna.t0.s$Bacillus, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t0.s$Bacillus, type = "nbinomial")
+
+#Check if readcount is significant
+bac.dna.readcount <- glmmTMB(Bacillus ~ log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(bac.dna.readcount)
+car::Anova(bac.dna.readcount)
+test <- simulateResiduals(fittedModel = bac.dna.readcount, plot = T, use.u = T)
+#readcount is not significant
+
+#Check if block is significant
+bac.dna.block <- glmmTMB(Bacillus ~  block2 + log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(bac.dna.block)
+car::Anova(bac.dna.block)
+test <- simulateResiduals(fittedModel = bac.dna.block, plot = T, use.u = T)
+#block2 is significant, readcount is not significant
+
+
+#test for pre crops
+bac.dna.rand <- glmmTMB(Bacillus ~  1 +(1|block2),
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log")) 
+bac.dna.pcrand <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+bac.dna.pcrandoff <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+anova(bac.dna.rand, bac.dna.pcrand, bac.dna.pcrandoff) 
+test <- simulateResiduals(fittedModel = bac.dna.pcrandoff, plot = T)
+
+#without offset
+bac.dna.pcrandread <- glmmTMB(Bacillus ~  pre.crop+(1|block2)+(1|readcount.tot),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+bac.dna.pcrandnoread <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+anova(bac.dna.pcrandread, bac.dna.pcrandnoread)
+
+
+#block 2 significant, readcount ns= select model without offset
+bac.dna.pcrand <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+summary(bac.dna.pcrand)
+knitr::kable(summary(bac.dna.pcrand)$coefficients, digits = 4)
+car::Anova (bac.dna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = bac.dna.pcrand, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(bac.dna.pcrand)
+bac.dna.pcrand_coef <- cbind(coef(summary(bac.dna.pcrand)),
+                       confint(bac.dna.pcrand))
+
+
+
+#block is significant, readcount no, so re crop is modeled on nb without offset. Pre crop are not significant
+```
+
+Rhizobium
+```{r}
+data.gen.dna.t0.s$Rhizobium
+#######with glmtmb
+hist(data.gen.dna.t0.s$Rhizobium)
+boxplot(data.gen.dna.t0.s$Rhizobium ~ data.gen.dna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.dna.t0.s$Rhizobium)#yes
+library(vcd)
+distplot(data.gen.dna.t0.s$Rhizobium, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t0.s$Rhizobium, type = "nbinomial")
+
+#Check if readcount is significant
+rhiz.dna.readcount <- glmmTMB(Rhizobium ~ log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(rhiz.dna.readcount)
+car::Anova(rhiz.dna.readcount)
+test <- simulateResiduals(fittedModel = rhiz.dna.readcount, plot = T, use.u = T)
+#readcount is significant
+
+#Check if block is significant
+rhiz.dna.block <- glmmTMB(Rhizobium ~  block2, 
+                         data = data.gen.dna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.dna.block)
+car::Anova(rhiz.dna.block)
+test <- simulateResiduals(fittedModel = rhiz.dna.block, plot = T, use.u = T)
+#block2 is significant
+
+
+#test for pre crops
+rhiz.dna.rand <- glmmTMB(Rhizobium ~  1 +(1|block2),
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log")) 
+rhiz.dna.pcrand <- glmmTMB(Rhizobium ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+rhiz.dna.pcrandoff <- glmmTMB(Rhizobium ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+anova(rhiz.dna.rand, rhiz.dna.pcrand, rhiz.dna.pcrandoff) 
+test <- simulateResiduals(fittedModel = rhiz.dna.pcrandoff, plot = T)
+#without offset
+rhiz.dna.pcrand2 <- glmmTMB(Rhizobium ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+anova(rhiz.dna.rand, rhiz.dna.pcrand, rhiz.dna.pcrandoff, rhiz.dna.pcrand2) 
+test <- simulateResiduals(fittedModel = rhiz.dna.pcrand2, plot = T)
+
+
+#block 2 significant, readcount significant = select model with offset
+rhiz.dna.pcrandoff <- glmmTMB(Rhizobium ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+knitr::kable(summary(rhiz.dna.pcrandoff)$coefficients, digits = 4)
+summary(rhiz.dna.pcrandoff)
+car::Anova(rhiz.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = rhiz.dna.pcrandoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(rhiz.dna.pcrandoff)
+rhiz.dna.pcrand_coef <- cbind(coef(summary(rhiz.dna.pcrandoff)),
+                       confint(rhiz.dna.pcrandoff))
+```
+
+Variovorax
+```{r}
+data.gen.dna.t0.s$Variovorax
+plot(data.gen.dna.t0.s$Variovorax~data.gen.dna.t0.s$pre.crop)
+plot(data.gen.dna.t0.s$Variovorax)
+#######with glmtmb
+hist(data.gen.dna.t0.s$Variovorax)
+boxplot(data.gen.dna.t0.s$Variovorax ~ data.gen.dna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.dna.t0.s$Variovorax)#yes
+library(vcd)
+distplot(data.gen.dna.t0.s$Variovorax, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t0.s$Variovorax, type = "nbinomial")
+
+#Check if readcount is significant
+var.dna.readcount <- glmmTMB(Variovorax ~ log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(var.dna.readcount)
+car::Anova(var.dna.readcount)
+test <- simulateResiduals(fittedModel = var.dna.readcount, plot = T, use.u = T)
+#readcount is not significant
+
+#Check if block is significant
+var.dna.block <- glmmTMB(Variovorax ~  block2, 
+                         data = data.gen.dna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.block)
+car::Anova(var.dna.block)
+test <- simulateResiduals(fittedModel = var.dna.block, plot = T, use.u = T)
+#block2 is significant
+
+
+#test for pre crops
+var.dna.rand <- glmmTMB(Variovorax ~  1 +(1|block2),
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log")) 
+var.dna.pcrand <- glmmTMB(Variovorax ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+
+anova(var.dna.rand, var.dna.pcrand) 
+test <- simulateResiduals(fittedModel = var.dna.pcrand, plot = T)
+
+#block 2 significant, readcount non-significant = select model without  offset
+var.dna.pcrand <- glmmTMB(Variovorax ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+knitr::kable(summary(var.dna.pcrand)$coefficients, digits = 4)
+summary(var.dna.pcrand)
+car::Anova(var.dna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = var.dna.pcrandoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(var.dna.pcrandoff)
+var.dna.pcrand_coef <- cbind(coef(summary(var.dna.pcrandoff)),
+                       confint(var.dna.pcrandoff))
+```
+
+Lysobacter
+```{r}
+data.gen.dna.t0.s$Lysobacter
+plot(data.gen.dna.t0.s$Lysobacter~data.gen.dna.t0.s$pre.crop)
+plot(data.gen.dna.t0.s$Lysobacter)
+#######with glmtmb
+hist(data.gen.dna.t0.s$Lysobacter)
+boxplot(data.gen.dna.t0.s$Lysobacter ~ data.gen.dna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.dna.t0.s$Lysobacter)#yes
+library(vcd)
+distplot(data.gen.dna.t0.s$Lysobacter, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t0.s$Lysobacter, type = "nbinomial")
+
+#Check if readcount is significant
+lys.dna.readcount <- glmmTMB(Lysobacter ~ log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(lys.dna.readcount)
+car::Anova(lys.dna.readcount)
+test <- simulateResiduals(fittedModel = lys.dna.readcount, plot = T, use.u = T)
+#readcount is not significant but it doesn't fit
+
+#Check if block is significant
+lys.dna.block <- glmmTMB(Lysobacter ~  block2, 
+                         data = data.gen.dna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.dna.block)
+car::Anova(lys.dna.block)
+test <- simulateResiduals(fittedModel = lys.dna.block, plot = T, use.u = T)
+#block2 is not significant but it doesn't fit
+
+#test for pre crops
+lys.dna.rand <- glmmTMB(Lysobacter ~  1 +(1|block2),
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log")) 
+lys.dna.pcrand <- glmmTMB(Lysobacter ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+lys.dna.pcrandoff <- glmmTMB(Lysobacter ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+lys.dna.pc <- glmmTMB(Lysobacter ~  pre.crop,
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+lys.dna.null<- glmmTMB(Lysobacter ~  1,
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log"))
+
+anova(lys.dna.null, lys.dna.rand, lys.dna.pcrand, lys.dna.pcrandoff, lys.dna.pc) 
+test <- simulateResiduals(fittedModel = lys.dna.pc, plot = T)
+
+#block 2 non-significant, readcount non-significant, pre crop non significant, select model without  offset and without block2 only pre crop
+lys.dna.pc <- glmmTMB(Lysobacter ~  pre.crop,
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+knitr::kable(summary(lys.dna.pc)$coefficients, digits = 4)
+summary(lys.dna.pc)
+car::Anova(lys.dna.pc)
+
+#check model
+test <- simulateResiduals(fittedModel = lys.dna.pcrandoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(lys.dna.pcrandoff)
+lys.dna.pcrand_coef <- cbind(coef(summary(lys.dna.pcrandoff)),
+                       confint(lys.dna.pcrandoff))
+```
+
+Pseudomonas
+```{r}
+data.gen.dna.t0.s$Pseudomonas
+plot(data.gen.dna.t0.s$Pseudomonas~data.gen.dna.t0.s$pre.crop)
+plot(data.gen.dna.t0.s$Pseudomonas)
+#######with glmtmb
+hist(data.gen.dna.t0.s$Pseudomonas)
+boxplot(data.gen.dna.t0.s$Pseudomonas ~ data.gen.dna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.dna.t0.s$Pseudomonas)#no
+library(vcd)
+distplot(data.gen.dna.t0.s$Pseudomonas, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t0.s$Pseudomonas, type = "nbinomial")
+
+#Check if readcount is significant
+pse.dna.readcount <- glmmTMB(Pseudomonas ~ log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(pse.dna.readcount)
+car::Anova(pse.dna.readcount)
+test <- simulateResiduals(fittedModel = pse.dna.readcount, plot = T, use.u = T)
+#readcount is not significant 
+
+#Check if block is significant
+pse.dna.block <- glmmTMB(Pseudomonas ~  block2, 
+                         data = data.gen.dna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(pse.dna.block)
+car::Anova(pse.dna.block)
+test <- simulateResiduals(fittedModel = pse.dna.block, plot = T, use.u = T)
+#block2 is significant 
+
+#test for pre crops
+pse.dna.rand <- glmmTMB(Pseudomonas ~  1 +(1|block2),
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log")) 
+pse.dna.pcrand <- glmmTMB(Pseudomonas ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+pse.dna.pcrandoff <- glmmTMB(Pseudomonas ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+pse.dna.pc <- glmmTMB(Pseudomonas ~  pre.crop,
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+pse.dna.null<- glmmTMB(Pseudomonas ~  1,
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log"))
+
+anova(pse.dna.null, pse.dna.rand, pse.dna.pcrand, pse.dna.pcrandoff, pse.dna.pc) 
+test <- simulateResiduals(fittedModel = pse.dna.pc, plot = T)
+
+#block 2 non-significant, readcount non-significant, pre crop non significant, select model without  offset and without block2 only pre crop
+pse.dna.pcrand <- glmmTMB(Pseudomonas ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+knitr::kable(summary(pse.dna.pc)$coefficients, digits = 4)
+summary(pse.dna.pc)
+car::Anova(pse.dna.pc)
+
+#check model
+test <- simulateResiduals(fittedModel = pse.dna.pcrandoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(pse.dna.pcrandoff)
+pse.dna.pcrand_coef <- cbind(coef(summary(pse.dna.pcrandoff)),
+                       confint(pse.dna.pcrandoff))
+```
+####################################################################################################################################
+
+RNA
+
+Bacillus
+```{r}
+#######with glmtmb
+hist(data.gen.rna.t0.s$Bacillus)
+boxplot(data.gen.rna.t0.s$Bacillus ~ data.gen.rna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.rna.t0.s$Bacillus)#yes
+library(vcd)
+distplot(data.gen.rna.t0.s$Bacillus, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t0.s$Bacillus, type = "nbinomial")
+
+#Check if readcount is significant
+bac.rna.readcount <- glmmTMB(Bacillus ~ log(readcount.tot), 
+                         data = data.gen.rna.t0.s , 
+                         family = nbinom1)
+summary(bac.rna.readcount)
+car::Anova(bac.rna.readcount)
+test <- simulateResiduals(fittedModel = bac.rna.readcount, plot = T, use.u = T)
+#readcount is significant but doesn't fit
+
+#Check if block is significant
+bac.rna.block <- glmmTMB(Bacillus ~  block2 + log(readcount.tot), 
+                         data = data.gen.rna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(bac.rna.block)
+car::Anova(bac.rna.block)
+test <- simulateResiduals(fittedModel = bac.rna.block, plot = T, use.u = T)
+#block2 is significant, readcount is not significant but doesn't fit
+
+
+#test for pre crops
+bac.rna.rand <- glmmTMB(Bacillus ~  1 +(1|block2),
+                        data = data.gen.rna.t0.s , 
+                        family = nbinom1(link = "log")) 
+bac.rna.pcrand <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+bac.rna.pcrandoff <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+bac.rna.pcrand2 <- glmmTMB(Bacillus ~  pre.crop+(1|block2) + (1|readcount),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+anova(bac.rna.rand, bac.rna.pcrand, bac.rna.pcrandoff, bac.rna.pcrand2) 
+
+test <- simulateResiduals(fittedModel = bac.rna.pcrandoff, plot = T)
+
+#block2 significant, readcount ns= select model without offset
+bac.rna.pcrand <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+summary(bac.rna.pcrand)
+knitr::kable(summary(bac.rna.pcrand)$coefficients, digits = 4)
+car::Anova (bac.rna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = bac.rna.pcrand, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(bac.rna.pcrand)
+bac.rna.pcrand_coef <- cbind(coef(summary(bac.rna.pcrand)),
+                       confint(bac.rna.pcrand))
+
+
+emm.res <- emmeans(bac.rna.pcrand, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+#block is significant, readcount no, so re crop is modeled on nb without offset. Pre crop are not significant
+```
+
+Rhizobium
+```{r}
+data.gen.rna.t0.s$Rhizobium
+#######with glmtmb
+hist(data.gen.rna.t0.s$Rhizobium)
+boxplot(data.gen.rna.t0.s$Rhizobium ~ data.gen.rna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.rna.t0.s$Rhizobium)#yes
+library(vcd)
+distplot(data.gen.rna.t0.s$Rhizobium, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t0.s$Rhizobium, type = "nbinomial")
+
+#Check if readcount is significant
+rhiz.rna.readcount <- glmmTMB(Rhizobium ~ log(readcount.tot), 
+                         data = data.gen.rna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(rhiz.rna.readcount)
+car::Anova(rhiz.rna.readcount)
+test <- simulateResiduals(fittedModel = rhiz.rna.readcount, plot = T, use.u = T)
+#readcount is not significant
+
+#Check if block is significant
+rhiz.rna.block <- glmmTMB(Rhizobium ~  block2, 
+                         data = data.gen.rna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.rna.block)
+car::Anova(rhiz.rna.block)
+test <- simulateResiduals(fittedModel = rhiz.rna.block, plot = T, use.u = T)
+#block2 is significant
+
+
+#test for pre crops
+rhiz.rna.rand <- glmmTMB(Rhizobium ~  1 +(1|block2),
+                        data = data.gen.rna.t0.s , 
+                        family = nbinom1(link = "log")) 
+rhiz.rna.pcrand <- glmmTMB(Rhizobium ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+rhiz.rna.pcrandoff <- glmmTMB(Rhizobium ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+anova(rhiz.rna.rand, rhiz.rna.pcrand, rhiz.rna.pcrandoff) 
+test <- simulateResiduals(fittedModel = rhiz.rna.pcrand, plot = T)
+#selected
+rhiz.rna.pcrand <- glmmTMB(Rhizobium ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+#check model
+test <- simulateResiduals(fittedModel = rhiz.rna.pcrand, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(rhiz.rna.pcrandoff)
+
+summary(rhiz.rna.pcrand)
+knitr::kable(summary(rhiz.rna.pcrand)$coefficients, digits = 4)
+car::Anova (rhiz.rna.pcrand)
+
+
+```
+
+Variovorax
+```{r}
+data.gen.rna.t0.s$Variovorax
+plot(data.gen.rna.t0.s$Variovorax~data.gen.rna.t0.s$pre.crop)
+plot(data.gen.rna.t0.s$Variovorax)
+#######with glmtmb
+hist(data.gen.rna.t0.s$Variovorax)
+boxplot(data.gen.rna.t0.s$Variovorax ~ data.gen.rna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.rna.t0.s$Variovorax)#yes
+library(vcd)
+distplot(data.gen.rna.t0.s$Variovorax, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t0.s$Variovorax, type = "nbinomial")
+
+#Check if readcount is significant
+var.rna.readcount <- glmmTMB(Variovorax ~ log(readcount.tot), 
+                         data = data.gen.rna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(var.rna.readcount)
+car::Anova(var.rna.readcount)
+test <- simulateResiduals(fittedModel = var.rna.readcount, plot = T, use.u = T)
+#readcount is significant
+
+#Check if block is significant
+var.rna.block <- glmmTMB(Variovorax ~  block2, 
+                         data = data.gen.rna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.rna.block)
+car::Anova(var.rna.block)
+test <- simulateResiduals(fittedModel = var.rna.block, plot = T, use.u = T)
+#block2 is significant
+
+
+#test for pre crops
+var.rna.rand <- glmmTMB(Variovorax ~  1 +(1|block2),
+                        data = data.gen.rna.t0.s , 
+                        family = nbinom1(link = "log")) 
+var.rna.pcrand <- glmmTMB(Variovorax ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+var.rna.pcrandoff <- glmmTMB(Variovorax ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+
+anova(var.rna.rand, var.rna.pcrand, var.rna.pcrandoff) 
+test <- simulateResiduals(fittedModel = var.rna.pcrand, plot = T)
+
+#block 2 significant, readcount is significant = select model without  offset
+var.rna.pcrandoff <- glmmTMB(Variovorax ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+knitr::kable(summary(var.rna.pcrandoff)$coefficients, digits = 4)
+summary(var.rna.pcrandoff)
+car::Anova(var.rna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = var.rna.pcrandoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(var.rna.pcrandoff)
+var.rna.pcrand_coef <- cbind(coef(summary(var.rna.pcrandoff)),
+                       confint(var.rna.pcrandoff))
+```
+
+Lysobacter
+```{r}
+data.gen.rna.t0.s$Lysobacter
+plot(data.gen.rna.t0.s$Lysobacter~data.gen.rna.t0.s$pre.crop)
+plot(data.gen.rna.t0.s$Lysobacter)
+#######with glmtmb
+hist(data.gen.rna.t0.s$Lysobacter)
+boxplot(data.gen.rna.t0.s$Lysobacter ~ data.gen.rna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.rna.t0.s$Lysobacter)#no
+library(vcd)
+distplot(data.gen.rna.t0.s$Lysobacter, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t0.s$Lysobacter, type = "nbinomial")
+
+#Check if readcount is significant
+lys.rna.readcount <- glmmTMB(Lysobacter ~ log(readcount.tot), 
+                         data = data.gen.rna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(lys.rna.readcount)
+car::Anova(lys.rna.readcount)
+test <- simulateResiduals(fittedModel = lys.rna.readcount, plot = T, use.u = T)
+#readcount is not significant but it doesn't fit
+
+#Check if block is significant
+lys.rna.block <- glmmTMB(Lysobacter ~  block2, 
+                         data = data.gen.rna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.rna.block)
+car::Anova(lys.rna.block)
+test <- simulateResiduals(fittedModel = lys.rna.block, plot = T, use.u = T)
+#block2 is not significant but it doesn't fit
+
+#test for pre crops
+lys.rna.rand <- glmmTMB(Lysobacter ~  1 +(1|block2),
+                        data = data.gen.rna.t0.s , 
+                        family = nbinom1(link = "log")) 
+lys.rna.pcrand <- glmmTMB(Lysobacter ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+lys.rna.pcrandoff <- glmmTMB(Lysobacter ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+lys.rna.pc <- glmmTMB(Lysobacter ~  pre.crop,
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+lys.rna.null<- glmmTMB(Lysobacter ~  1,
+                        data = data.gen.rna.t0.s , 
+                        family = nbinom1(link = "log"))
+
+anova(lys.rna.null, lys.rna.rand, lys.rna.pcrand, lys.rna.pcrandoff, lys.rna.pc) 
+test <- simulateResiduals(fittedModel = lys.rna.pc, plot = T)
+
+#block 2 non-significant, readcount non-significant, pre crop non significant, select model without  offset and without block2 only pre crop
+lys.rna.pc <- glmmTMB(Lysobacter ~  pre.crop,
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+knitr::kable(summary(lys.rna.pc)$coefficients, digits = 4)
+summary(lys.rna.pc)
+car::Anova(lys.rna.pc)
+
+#check model
+test <- simulateResiduals(fittedModel = lys.rna.pcrandoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(lys.rna.pcrandoff)
+lys.rna.pcrand_coef <- cbind(coef(summary(lys.rna.pcrandoff)),
+                       confint(lys.rna.pcrandoff))
+```
+
+Pseudomonas
+```{r}
+data.gen.rna.t0.s$Pseudomonas
+plot(data.gen.rna.t0.s$Pseudomonas~data.gen.rna.t0.s$pre.crop)
+plot(data.gen.rna.t0.s$Pseudomonas)
+#######with glmtmb
+hist(data.gen.rna.t0.s$Pseudomonas)
+boxplot(data.gen.rna.t0.s$Pseudomonas ~ data.gen.rna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.rna.t0.s$Pseudomonas)#no
+library(vcd)
+distplot(data.gen.rna.t0.s$Pseudomonas, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t0.s$Pseudomonas, type = "nbinomial")
+
+#Check if readcount is significant
+pse.rna.readcount <- glmmTMB(Pseudomonas ~ log(readcount.tot), 
+                         data = data.gen.rna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(pse.rna.readcount)
+car::Anova(pse.rna.readcount)
+test <- simulateResiduals(fittedModel = pse.rna.readcount, plot = T, use.u = T)
+#readcount is significant 
+
+#Check if block is significant
+pse.rna.block <- glmmTMB(Pseudomonas ~  block2, 
+                         data = data.gen.rna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(pse.rna.block)
+car::Anova(pse.rna.block)
+test <- simulateResiduals(fittedModel = pse.rna.block, plot = T, use.u = T)
+#block2 is not significant 
+
+#test for pre crops
+pse.rna.rand <- glmmTMB(Pseudomonas ~  1 +(1|block2),
+                        data = data.gen.rna.t0.s , 
+                        family = nbinom1(link = "log")) 
+pse.rna.pcrand <- glmmTMB(Pseudomonas ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+pse.rna.pcrandoff <- glmmTMB(Pseudomonas ~  pre.crop+(1|block2),
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+pse.rna.pc <- glmmTMB(Pseudomonas ~  pre.crop,
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"))
+pse.rna.null<- glmmTMB(Pseudomonas ~  1,
+                        data = data.gen.rna.t0.s , 
+                        family = nbinom1(link = "log"))
+pse.rna.pcoff <- glmmTMB(Pseudomonas ~  pre.crop,
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+
+anova(pse.rna.null, pse.rna.rand, pse.rna.pcrand, pse.rna.pcrandoff, pse.rna.pc, pse.rna.pcoff) 
+test <- simulateResiduals(fittedModel = pse.rna.pcoff, plot = T)
+
+#block 2 non-significant, readcount is significant, pre crop non significant, select model with  offset and without block2 and with pre crop
+pse.rna.pcoff <- glmmTMB(Pseudomonas ~  pre.crop,
+                      data = data.gen.rna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+knitr::kable(summary(pse.rna.pcoff)$coefficients, digits = 4)
+summary(pse.rna.pcoff)
+car::Anova(pse.rna.pcoff)
+
+#check model
+test <- simulateResiduals(fittedModel = pse.rna.pcoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(pse.rna.pcoff)
+pse.rna.pcrand_coef <- cbind(coef(summary(pse.rna.pcoff)),
+                       confint(pse.rna.pcoff))
+
+#emmeans 
+emm.res <- emmeans(pse.rna.pcoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+```
+
+
+
+############################################################################################################################################################################################################################################################################################################################################################################################################################
+t1
+
+```{r}
+load (file = 'ps-selected-only-bact-filt-lowabd-no-neg-norep2.RData')
+ps.bact.dna.t1 <- subset_samples(ps.bact, nucleic.acid == "DNA"  & time.point == "T1")
+ps.bact.rna.t1 <- subset_samples(ps.bact, nucleic.acid == "RNA"  & time.point == "T1")
+ps.bact.dna.t1@sam_data$readcount.tot <- readcount(ps.bact.dna.t1)
+ps.bact.rna.t1@sam_data$readcount.tot <- readcount(ps.bact.rna.t1)
+
+ant.bact.dna.t1.gen <- subset_taxa(ps.bact.dna.t1, Family %in% c("Bacillaceae", "Rhizobiaceae", "Comamonadaceae", "Pseudomonadaceae", "Xanthomonadaceae"))
+ant.bact.dna.t1.gen <- subset_taxa(ant.bact.dna.t1.gen,Genus %in% c("Pseudomonas", "Bacillus", "Pasteuria", "Lysobacter", "Rhizobium", "Variovorax", "Serratia"))
+
+ant.bact.dna.t1.gen@sam_data$pre.crop <- fct_relevel(ant.bact.dna.t1.gen@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.bact.dna.t1.gen@sam_data$cc <- fct_relevel(ant.bact.dna.t1.gen@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+ant.bact.rna.t1.gen <- subset_taxa(ps.bact.rna.t1, Family %in% c("Bacillaceae", "Rhizobiaceae", "Comamonadaceae", "Pseudomonadaceae", "Xanthomonadaceae"))
+
+ant.bact.rna.t1.gen <- subset_taxa(ant.bact.rna.t1.gen,Genus %in% c("Pseudomonas", "Bacillus", "Pasteuria", "Lysobacter", "Rhizobium", "Variovorax", "Serratia"))
+                                    
+ant.bact.dna.t1.gen@sam_data$pre.crop <- fct_relevel(ant.bact.dna.t1.gen@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.bact.rna.t1.gen@sam_data$cc <- fct_relevel(ant.bact.rna.t1.gen@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+#DNA
+ant.gen.dna.t1.s <- microbiome::aggregate_taxa(ant.bact.dna.t1.gen, "Genus")
+samdf.gen.dna.t1.s <-as.data.frame(sample_data (ant.gen.dna.t1.s))
+otu.gen.dna.t1.s <- as.data.frame (t(otu_table(ant.gen.dna.t1.s)))
+tax.gen.dna.t1.s <- as.data.frame(tax_table(ant.gen.dna.t1.s))
+
+data.gen.dna.t1.s <- merge (samdf.gen.dna.t1.s, otu.gen.dna.t1.s,  by = 'row.names')
+colnames(data.gen.dna.t1.s)
+
+data.gen.dna.t1.s$pre.crop <- as.factor(data.gen.dna.t1.s$pre.crop)
+data.gen.dna.t1.s$pre.crop <- fct_relevel(data.gen.dna.t1.s$pre.crop, "er", "ir", "ry", "bo")
+
+#add readcount
+data.gen.dna.t1.s$readcount <- rowSums(data.gen.dna.t1.s[24:28])
+
+#RNA
+ant.gen.rna.t1.s <- microbiome::aggregate_taxa(ant.bact.rna.t1.gen, "Genus")
+samdf.gen.rna.t1.s <-as.data.frame(sample_data (ant.gen.rna.t1.s))
+otu.gen.rna.t1.s <- as.data.frame (t(otu_table(ant.gen.rna.t1.s)))
+tax.gen.rna.t1.s <- as.data.frame(tax_table(ant.gen.rna.t1.s))
+
+data.gen.rna.t1.s <- merge (samdf.gen.rna.t1.s, otu.gen.rna.t1.s,  by = 'row.names')
+colnames(data.gen.rna.t1.s)
+
+colnames(data.gen.rna.t1.s)
+data.gen.rna.t1.s$pre.crop <- as.factor(data.gen.rna.t1.s$pre.crop)
+data.gen.rna.t1.s$pre.crop <- fct_relevel(data.gen.rna.t1.s$pre.crop, "er", "ir", "ry", "bo")
+#add readcount
+data.gen.rna.t1.s$readcount <- rowSums(data.gen.rna.t1.s[24:28])
+```
+
+#plots
+```{r}
+data.gen.dna.t1.s.long <- data.gen.dna.t1.s %>% 
+  tidyr::pivot_longer(cols = Bacillus:Lysobacter, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+              mutate (Rel.abundance.DNA = (Abundance/readcount.tot)) 
+#data.gen.dna.t1.s.long$pre.crop <- forcats::fct_relevel(data.gen.dna.t1.s.long$pre.crop, "bo", "ry", "ir", "er" )
+  
+data.gen.rna.t1.s.long <- data.gen.rna.t1.s %>% 
+  tidyr::pivot_longer(cols = Bacillus:Lysobacter, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+  mutate (Rel.abundance.RNA = (Abundance/readcount.tot)) 
+#data.gen.rna.t1.s.long$pre.crop <- forcats::fct_relevel(data.gen.rna.t1.s.long$pre.crop, "bo", "ry", "ir", "er" )
+
+#horizontal 
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+
+plot.ant.bact.dna.t1h<- data.gen.dna.t1.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.DNA, x =cc, fill = cc))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                        scale_y_continuous( labels = scales::percent)+
+                        scale_fill_manual(values = colorCode2)+
+                        labs(title = "Relative abundance of bacterial antaginists in DNA", y = "Relative abundance")+
+                        facet_wrap(vars(Genus), scales = "free", strip.position = "top", nrow = 1)+
+   theme_classic()+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_text(angle = 90, size = 6, hjust = 1)),
+        strip.text.x = element_text(size = 8))
+plot.ant.bact.dna.t1h
+
+plot.ant.bact.rna.t1h<- data.gen.rna.t1.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.RNA, x =cc, fill = cc))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                          scale_y_continuous(labels = scales::percent)+
+                        scale_fill_manual(values = colorCode2)+
+                        labs(title = "Relative abundance of bacterial antaginists in RNA", y = "Relative abundance ")+
+                        facet_wrap(vars(Genus), scales = "free", strip.position = "top", nrow = 1)+
+   theme_classic()+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_text(angle = 90, size = 6, hjust = 1)),
+        strip.text.x = element_text(size = 8))
+plot.ant.bact.rna.t1h
+
+library(cowplot)
+#ant.t0 <- plot_grid(plot.ant.bact.dna.t0h, 
+#                    plot.ant.bact.rna.t0h,
+#                    align = "hv",
+#                    ncol = 1)
+#ant.t0 
+
+```
+
+
+```{r}
+library(cowplot)
+ant.t1.double.dna <- plot_grid( plot.comp.dna,
+                            plot.ant.bact.dna.t1h,
+                            align = "hv",
+                            ncol = 2,
+                            rel_widths = c(0.5,1),
+                            scale = 1)
+ant.t1.double.dna
+
+ant.t1.double.rna <- plot_grid( plot.comp.rna,
+                            plot.ant.bact.rna.t1h,
+                            align = "hv",
+                            ncol = 2,
+                            rel_widths = c(0.5,1),
+                            scale = 1)
+ant.t1.double.rna
+
+ant.t1.four <- plot_grid(ant.t1.double.dna,
+                         ant.t1.double.rna,
+                         align = "hv",
+                         nrow = 2,
+                         rel_widths = c(0.5,1),
+                          scale = 1)
+ant.t1.four
+```
+
+Bacillus
+```{r}
+#######with glmtmb
+data.gen.dna.t1.s$Bacillus
+hist(data.gen.dna.t1.s$Bacillus)
+boxplot(data.gen.dna.t1.s$Bacillus ~ data.gen.dna.t1.s$pre.crop)
+#normal?
+shapiro.test(data.gen.dna.t1.s$Bacillus)
+library(vcd)
+distplot(data.gen.dna.t1.s$Bacillus, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t1.s$Bacillus, type = "nbinomial")
+
+#Check if readcount is significant
+bac.dna.readcount <- glmmTMB(Bacillus ~ log(readcount.tot), 
+                         data = data.gen.dna.t1.s , 
+                         family = nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(bac.dna.readcount)
+car::Anova(bac.dna.readcount)
+test <- simulateResiduals(fittedModel = bac.dna.readcount, plot = T, use.u = T)
+#readcount is significant
+
+#Check if pre crop is significant
+bac.dna.pc <- glmmTMB(Bacillus ~ pre.crop, 
+                         data = data.gen.dna.t1.s , 
+                         family = nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(bac.dna.pc)
+car::Anova(bac.dna.pc)
+test <- simulateResiduals(fittedModel = bac.dna.pc, plot = T, use.u = T)
+#pre crop is non-significant
+
+#Check if block is significant
+bac.dna.block <- glmmTMB(Bacillus ~  block2 , 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(bac.dna.block)
+car::Anova(bac.dna.block)
+test <- simulateResiduals(fittedModel = bac.dna.block, plot = T, use.u = T)
+#block2 is non-significant, readcount is significant
+
+#need zero-inflation
+#test for cover crop
+bac.dna.rand <- glmmTMB(Bacillus ~  1 +(1|block2),
+                        data = data.gen.dna.t1.s , 
+                        family = nbinom1(link = "log")) 
+bac.dna.ccrand <- glmmTMB(Bacillus ~  cc+(1|block2),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"))
+bac.dna.ccrandoff <- glmmTMB(Bacillus ~  cc+(1|block2),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+bac.dna.ccoff <- glmmTMB(Bacillus ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+
+bac.dna.ccrandzi <- glmmTMB(Bacillus ~  cc+(1|block2),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                         ziformula = ~1)
+bac.dna.ccrandoffzi <- glmmTMB(Bacillus ~  cc+(1|block2),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+bac.dna.ccoffzi <- glmmTMB(Bacillus ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+
+anova(bac.dna.rand, bac.dna.ccrand, bac.dna.ccrandoff, bac.dna.ccoff, bac.dna.ccrandzi, bac.dna.ccrandoffzi,bac.dna.ccoffzi ) 
+test <- simulateResiduals(fittedModel = bac.dna.ccoffzi, plot = T)
+testZeroInflation(test)
+
+#block 2 non-significant, readcount significant = select model with offset without random
+bac.dna.ccoffzi <- glmmTMB(Bacillus ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(bac.dna.ccoffzi)
+knitr::kable(summary(bac.dna.ccoffzi)$coefficients, digits = 4)
+car::Anova (bac.dna.ccoffzi)
+
+#check model
+test <- simulateResiduals(fittedModel = bac.dna.ccoffzi, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(bac.dna.ccoffzi)
+
+
+ref_grid(bac.dna.ccoffzi)
+#emm.off<-emmeans(bac.dna.ccoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(bac.dna.ccoffzi, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Rhizobium
+```{r}
+data.gen.dna.t1.s$Rhizobium
+#######with glmtmb
+hist(data.gen.dna.t1.s$Rhizobium)
+boxplot(data.gen.dna.t1.s$Rhizobium ~ data.gen.dna.t1.s$cc)
+#normal?
+shapiro.test(data.gen.dna.t1.s$Rhizobium)#yes
+library(vcd)
+distplot(data.gen.dna.t1.s$Rhizobium, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t1.s$Rhizobium, type = "nbinomial")
+
+#Check if readcount is significant
+rhiz.dna.readcount <- glmmTMB(Rhizobium ~ log(readcount.tot), 
+                         data = data.gen.dna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(rhiz.dna.readcount)
+car::Anova(rhiz.dna.readcount)
+test <- simulateResiduals(fittedModel = rhiz.dna.readcount, plot = T, use.u = T)
+#readcount is significant
+
+#Check if block is significant
+rhiz.dna.block <- glmmTMB(Rhizobium ~  block2, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.dna.block)
+car::Anova(rhiz.dna.block)
+test <- simulateResiduals(fittedModel = rhiz.dna.block, plot = T, use.u = T)
+#block2 is not significant
+
+#Check if prec crops is significant
+rhiz.dna.pc <- glmmTMB(Rhizobium ~  pre.crop, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.dna.pc)
+car::Anova(rhiz.dna.pc)
+test <- simulateResiduals(fittedModel = rhiz.dna.pc, plot = T, use.u = T)
+#block2 is not significant
+
+rhiz.dna.complete <- glmmTMB(Rhizobium ~  log(readcount.tot)+ cc + pre.crop + block2, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.dna.complete)
+car::Anova(rhiz.dna.complete)
+test <- simulateResiduals(fittedModel = rhiz.dna.complete, plot = T, use.u = T)
+
+#test for cc
+rhiz.dna.rand <- glmmTMB(Rhizobium ~  1 +(1|block2),
+                        data = data.gen.dna.t1.s , 
+                        family = nbinom1(link = "log")) 
+rhiz.dna.ccrand <- glmmTMB(Rhizobium ~  cc+(1|block2),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"))
+rhiz.dna.ccrandoff <- glmmTMB(Rhizobium ~  cc+(1|block2),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+rhiz.dna.ccoff <- glmmTMB(Rhizobium ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+rhiz.dna.ccrand2off <- glmmTMB(Rhizobium ~  cc+(1|block2)+(1|pre.crop),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+rhiz.dna.ccrandpcoff <- glmmTMB(Rhizobium ~  cc +(1|pre.crop),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+anova(rhiz.dna.rand, rhiz.dna.ccrand, rhiz.dna.ccrandoff, rhiz.dna.ccoff,rhiz.dna.complete,rhiz.dna.ccrand2off,rhiz.dna.ccrandpcoff) 
+test <- simulateResiduals(fittedModel = rhiz.dna.ccoff, plot = T)
+
+#block 2 non-significant, pre crop = ns, readcount significant = select model with offset
+rhiz.dna.ccoff <- glmer(Rhizobium ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+knitr::kable(summary(rhiz.dna.ccoff)$coefficients, digits = 4)
+summary(rhiz.dna.ccoff)
+car::Anova(rhiz.dna.ccoff)
+
+library(effects)
+effects_ok <- (requireNamespace("effects") && getRversion() >= "3.6.0")
+if (effects_ok) {
+(ae <- allEffects(rhiz.dna.ccoff))
+plot(ae)
+}
+if (effects_ok) {
+plot(allEffects(simex_b1))
+}
+
+ref_grid(rhiz.dna.ccoff)
+
+#pairwise - use without offset
+#emm.off<-emmeans(rhiz.dna.ccoff, "cc", type = "response") #lp for log values
+emm.res <- emmeans(rhiz.dna.ccoff, "cc", type = "response", offset = 0)
+
+#pw.off <- pairs (emm.off, type = "response", adjust = "BH")
+#pw.off
+pw.res <- pairs (emm.res, type = "response", adjust = "BH")
+pw.res
+
+#cld(emm.off, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#check model
+test <- simulateResiduals(fittedModel = rhiz.dna.ccrandpcoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(rhiz.dna.ccrandpcoff)
+rhiz.dna.ccrand_coef <- cbind(coef(summary(rhiz.dna.ccrandoff)),
+                       confint(rhiz.dna.ccrandoff))
+```
+
+Variovorax
+```{r}
+data.gen.dna.t1.s$Variovorax
+plot(data.gen.dna.t1.s$Variovorax~data.gen.dna.t1.s$cc)
+plot(data.gen.dna.t1.s$Variovorax~data.gen.dna.t1.s$pre.crop)
+#######with glmtmb
+hist(data.gen.dna.t1.s$Variovorax)
+boxplot(data.gen.dna.t1.s$Variovorax ~ data.gen.dna.t1.s$cc)
+#normal?
+shapiro.test(data.gen.dna.t1.s$Variovorax)#yes
+library(vcd)
+distplot(data.gen.dna.t1.s$Variovorax, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t1.s$Variovorax, type = "nbinomial")
+
+#Check if readcount is significant
+var.dna.readcount <- glmmTMB(Variovorax ~ log(readcount.tot), 
+                         data = data.gen.dna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(var.dna.readcount)
+car::Anova(var.dna.readcount)
+test <- simulateResiduals(fittedModel = var.dna.readcount, plot = T, use.u = T)
+#readcount is significant but doesn't fit
+
+#Check if block is significant
+var.dna.block <- glmmTMB(Variovorax ~  block2+log(readcount.tot), 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.block)
+car::Anova(var.dna.block)
+test <- simulateResiduals(fittedModel = var.dna.block, plot = T, use.u = T)
+#block2 is non significant but doesn't fit
+
+#Check if pre crop is significant
+var.dna.pc <- glmmTMB(Variovorax ~  pre.crop, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.pc)
+car::Anova(var.dna.pc)
+test <- simulateResiduals(fittedModel = var.dna.pc, plot = T, use.u = T)
+#pre crop is non significant but it doesn't fit
+
+#Check if pc + block + re
+var.dna.pcblre <- glmmTMB(Variovorax ~  log(readcount.tot)+pre.crop + block2, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.pcblre)
+car::Anova(var.dna.pcblre)
+test <- simulateResiduals(fittedModel = var.dna.pcblre, plot = T, use.u = T)
+#pre crop is non significant
+
+#Check if pc + block
+var.dna.pcbl <- glmmTMB(Variovorax ~  pre.crop + block2, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.pcbl)
+car::Anova(var.dna.pcbl)
+test <- simulateResiduals(fittedModel = var.dna.pcbl, plot = T, use.u = T)
+#pre crop is non significant
+
+#Check with cc is significant with pre crop
+var.dna.completepc <- glmmTMB(Variovorax ~  log(readcount.tot)+ cc + pre.crop , 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.completepc)
+car::Anova(var.dna.completepc)
+test <- simulateResiduals(fittedModel = var.dna.completepc, plot = T, use.u = T)
+
+#check 
+var.dna.completebl <- glmmTMB(Variovorax ~  log(readcount.tot)+ cc + block2 , 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.completebl)
+car::Anova(var.dna.completebl)
+test <- simulateResiduals(fittedModel = var.dna.completebl, plot = T, use.u = T)
+
+anova(var.dna.completebl, var.dna.completepc, )
+#Check if cc is significant
+var.dna.complete <- glmmTMB(Variovorax ~  log(readcount.tot)+ cc + pre.crop + block2, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.dna.complete)
+car::Anova(var.dna.complete)
+test <- simulateResiduals(fittedModel = var.dna.complete, plot = T, use.u = T)
+
+anova (var.dna.complete, var.dna.completebl, var.dna.completepc)
+anova(var.dna.pc, var.dna.complete)
+anova(var.dna.readcount,var.dna.block,var.dna.pc,var.dna.complete )
+
+#use cc + read + pre crop = pre crop is significant
+
+#test for pre crops
+var.dna.rand <- glmmTMB(Variovorax ~  1 +(1|pre.crop),
+                        data = data.gen.dna.t1.s , 
+                        family = nbinom1(link = "log")) 
+var.dna.ccrandoff <- glmmTMB(Variovorax ~  cc+(1|pre.crop),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+var.dna.ccpcoff <- glmmTMB(Variovorax ~  cc+pre.crop,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+var.dna.ccoff <- glmmTMB(Variovorax ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+var.dna.ccoffzi <- glmmTMB(Variovorax ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      ziformula = ~1, 
+                      offset = log(readcount.tot))
+var.dna.ccpcoffzi <- glmmTMB(Variovorax ~  cc+pre.crop,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      ziformula = ~1, 
+                      offset = log(readcount.tot))
+var.dna.ccrandoffzi <- glmmTMB(Variovorax ~  cc + (1|pre.crop),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      ziformula = ~1, 
+                      offset = log(readcount.tot))
+
+anova(var.dna.rand, var.dna.ccrandoff, var.dna.ccpcoff,var.dna.complete, var.dna.ccoff, var.dna.ccoffzi) 
+anova(var.dna.ccoffzi, var.dna.ccrandoffzi)
+test <- simulateResiduals(fittedModel = var.dna.ccrandoffzi, plot = T)
+
+#block 2 non-significant, pre crop significant , readcount significant = select model with offset
+var.dna.ccrandoffzi <- glmmTMB(Variovorax ~  cc + (1|pre.crop),
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      ziformula = ~1, 
+                      offset = log(readcount.tot))
+
+knitr::kable(summary(var.dna.ccrandoffzi)$coefficients, digits = 4)
+summary(var.dna.ccrandoffzi)
+car::Anova(var.dna.ccrandoffzi)
+
+#check model
+test <- simulateResiduals(fittedModel = var.dna.ccrandoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(var.dna.ccrandoff)
+testZeroInflation(test)
+var.dna.ccrand_coef <- cbind(coef(summary(var.dna.ccrandoff)),
+                       confint(var.dna.ccrandoff))
+
+ref_grid(var.dna.ccrandoffzi)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(var.dna.ccrandoffzi, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Lysobacter
+```{r}
+data.gen.dna.t1.s$Lysobacter
+plot(data.gen.dna.t1.s$Lysobacter~data.gen.dna.t1.s$cc)
+plot(data.gen.dna.t1.s$Lysobacter~data.gen.dna.t1.s$pre.crop)
+plot(data.gen.dna.t1.s$Lysobacter)
+hist(data.gen.dna.t1.s$Lysobacter)
+#normal?
+shapiro.test(data.gen.dna.t1.s$Lysobacter)#no
+library(vcd)
+distplot(data.gen.dna.t1.s$Lysobacter, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t1.s$Lysobacter, type = "nbinomial")
+
+#Check if readcount is significant
+lys.dna.readcount <- glmmTMB(Lysobacter ~ log(readcount.tot), 
+                         data = data.gen.dna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(lys.dna.readcount)
+car::Anova(lys.dna.readcount)
+test <- simulateResiduals(fittedModel = lys.dna.readcount, plot = T, use.u = T)
+#readcount is not significant but residuals doesn't fit
+
+#Check if block is significant
+lys.dna.block <- glmmTMB(Lysobacter ~  block2, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.dna.block)
+car::Anova(lys.dna.block)
+test <- simulateResiduals(fittedModel = lys.dna.block, plot = T, use.u = T)
+#block2 is not significant but it doesn't fit
+
+#Check if pre crop is significant
+lys.dna.pc <- glmmTMB(Lysobacter ~  pre.crop, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.dna.pc)
+car::Anova(lys.dna.pc)
+test <- simulateResiduals(fittedModel = lys.dna.pc, plot = T, use.u = T)
+#pre crop is not significant
+
+#Check if pre crop and block explain more with cc 
+lys.dna.complete <- glmmTMB(Lysobacter ~  log(readcount.tot)+pre.crop+block2+cc, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.dna.complete)
+car::Anova(lys.dna.complete)
+test <- simulateResiduals(fittedModel = lys.dna.complete, plot = T, use.u = T)
+#no fit
+
+#Check if block explain more with cc 
+lys.dna.completebl <- glmmTMB(Lysobacter ~  log(readcount.tot)+block2+cc, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.dna.completebl)
+car::Anova(lys.dna.completebl)
+test <- simulateResiduals(fittedModel = lys.dna.completebl, plot = T, use.u = T)
+
+#Check if pre crop explain more with cc 
+lys.dna.completepc <- glmmTMB(Lysobacter ~  log(readcount.tot)+pre.crop+cc, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.dna.completepc)
+car::Anova(lys.dna.completepc)
+test <- simulateResiduals(fittedModel = lys.dna.completepc, plot = T, use.u = T)
+#fits
+
+#Check if cc explain more without block and pre crops 
+lys.dna.recc <- glmmTMB(Lysobacter ~  log(readcount.tot)+cc, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(lys.dna.recc)
+car::Anova(lys.dna.recc)
+test <- simulateResiduals(fittedModel = lys.dna.recc, plot = T, use.u = T)
+#nope, best fit is when pre crop is added 
+testZeroInflation(test) #possible zero inflation
+
+lys.dna.recczi <- glmmTMB(Lysobacter ~  log(readcount.tot)+cc, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                      ziformula = ~1)
+summary(lys.dna.recczi)
+car::Anova(lys.dna.recczi)
+test <- simulateResiduals(fittedModel = lys.dna.recczi, plot = T, use.u = T)
+#fits
+
+#test for cc with offset
+lys.dna.ccoff <- glmmTMB(Lysobacter ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = lys.dna.ccoff, plot = T)
+testZeroInflation(test)
+
+lys.dna.ccoffzi <- glmmTMB(Lysobacter ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.dna.ccoffzi, plot = T)
+
+lys.dna.ccoffrandzi <- glmmTMB(Lysobacter ~  cc + (1|pre.crop) ,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.dna.ccoffrandzi, plot = T)
+
+lys.dna.null <- glmmTMB(Lysobacter ~  1 ,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.dna.null, plot = T)
+
+anova(lys.dna.null,lys.dna.ccoffrandzi, lys.dna.ccoffzi, lys.dna.ccoff)
+
+lys.dna.ccoffzi <- glmmTMB(Lysobacter ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.dna.ccoffzi, plot = T)
+knitr::kable(summary(lys.dna.ccoffzi)$coefficients, digits = 4)
+summary(lys.dna.ccoffzi)
+car::Anova(lys.dna.ccoffzi)
+
+#check model
+test <- simulateResiduals(fittedModel = lys.dna.ccoffzi, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(lys.dna.ccoffzi)
+lys.dna.ccrand_coef <- cbind(coef(summary(lys.dna.ccoffzi)),
+                       confint(lys.dna.ccoffzi))
+
+ref_grid(lys.dna.ccoffzi)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(lys.dna.ccoffzi, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Pseudomonas
+```{r}
+data.gen.dna.t1.s$Pseudomonas
+plot(data.gen.dna.t1.s$Pseudomonas~data.gen.dna.t1.s$cc)
+plot(data.gen.dna.t1.s$Pseudomonas~data.gen.dna.t1.s$pre.crop)
+plot(data.gen.dna.t1.s$Pseudomonas)
+#######with glmtmb
+hist(data.gen.dna.t1.s$Pseudomonas)
+#normal?
+shapiro.test(data.gen.dna.t1.s$Pseudomonas)#no
+library(vcd)
+distplot(data.gen.dna.t1.s$Pseudomonas, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t1.s$Pseudomonas, type = "nbinomial")
+
+#Check if readcount is significant
+pse.dna.readcount <- glmmTMB(Pseudomonas ~ log(readcount.tot), 
+                         data = data.gen.dna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(pse.dna.readcount)
+car::Anova(pse.dna.readcount)
+test <- simulateResiduals(fittedModel = pse.dna.readcount, plot = T, use.u = T)
+#readcount is not significant 
+
+#Check if block is significant
+pse.dna.block <- glmmTMB(Pseudomonas ~  block2, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(pse.dna.block)
+car::Anova(pse.dna.block)
+test <- simulateResiduals(fittedModel = pse.dna.block, plot = T, use.u = T)
+#block2 is non-significant 
+
+#Check if pre crop is significant
+pse.dna.pc <- glmmTMB(Pseudomonas ~  pre.crop, 
+                         data = data.gen.dna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(pse.dna.pc)
+car::Anova(pse.dna.pc)
+test <- simulateResiduals(fittedModel = pse.dna.pc, plot = T, use.u = T)
+#pre crop is non-significant 
+
+#test for cc
+pse.dna.null<- glmmTMB(Pseudomonas ~  1,
+                        data = data.gen.dna.t1.s , 
+                        family = nbinom1(link = "log")) 
+pse.dna.off <- glmmTMB(Pseudomonas ~  1,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+pse.dna.ccoff <- glmmTMB(Pseudomonas ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.dna.ccoff, plot = T)
+testZeroInflation(test) #non zero inflated
+
+anova(pse.dna.null, pse.dna.ccoff, pse.dna.off) 
+
+pse.dna.ccoff <- glmmTMB(Pseudomonas ~  cc,
+                      data = data.gen.dna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+
+knitr::kable(summary(pse.dna.ccoff)$coefficients, digits = 4)
+summary(pse.dna.ccoff)
+car::Anova(pse.dna.ccoff)
+
+#check model
+test <- simulateResiduals(fittedModel = pse.dna.ccoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(pse.dna.ccoff)
+
+ref_grid(pse.dna.ccoff)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(pse.dna.ccoff, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+####################################################################################################################################
+
+RNA
+
+Bacillus
+```{r}
+#######with glmtmb
+data.gen.rna.t1.s$Bacillus
+hist(data.gen.rna.t1.s$Bacillus)
+boxplot(data.gen.rna.t1.s$Bacillus ~ data.gen.rna.t1.s$pre.crop)
+boxplot(data.gen.rna.t1.s$Bacillus ~ data.gen.rna.t1.s$cc)
+#normal?
+shapiro.test(data.gen.rna.t1.s$Bacillus)#no
+library(vcd)
+distplot(data.gen.rna.t1.s$Bacillus, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t1.s$Bacillus, type = "nbinomial")
+
+#Check if readcount is significant
+bac.rna.readcount <- glmmTMB(Bacillus ~ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(bac.rna.readcount)
+car::Anova(bac.rna.readcount)
+test <- simulateResiduals(fittedModel = bac.rna.readcount, plot = T, use.u = T)
+testZeroInflation(test)
+#readcount is significant - also zero inflation
+
+bac.rna.readcountzi <- glmmTMB(Bacillus ~ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(bac.rna.readcountzi)
+car::Anova(bac.rna.readcountzi)
+test <- simulateResiduals(fittedModel = bac.rna.readcountzi, plot = T, use.u = T)
+
+#Check if pre crop is significant
+bac.rna.pc <- glmmTMB(Bacillus ~ pre.crop, 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(bac.rna.pc)
+car::Anova(bac.rna.pc)
+test <- simulateResiduals(fittedModel = bac.rna.pc, plot = T, use.u = T)
+#pre crop is non-significant
+
+#Check if block is significant
+bac.rna.block <- glmmTMB(Bacillus ~  block2 , 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(bac.rna.block)
+car::Anova(bac.rna.block)
+test <- simulateResiduals(fittedModel = bac.rna.block, plot = T, use.u = T)
+#block2 is significant
+
+#Check if block is sill  significant
+bac.rna.complete <- glmmTMB(Bacillus ~  block2+cc+ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(bac.rna.complete)
+car::Anova(bac.rna.complete)
+test <- simulateResiduals(fittedModel = bac.rna.complete, plot = T, use.u = T)
+#block2 is significant
+
+#test for cover crop
+bac.rna.null <- glmmTMB(Bacillus ~  1,
+                        data = data.gen.rna.t1.s , 
+                        family = nbinom1(link = "log"),
+                      offset = log(readcount.tot)) 
+bac.rna.rand <- glmmTMB(Bacillus ~  1 +(1|block2),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+bac.rna.ccrand <- glmmTMB(Bacillus ~  cc+(1|block2),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+anova(bac.rna.null, bac.rna.rand,bac.rna.ccrand )
+test <- simulateResiduals(fittedModel = bac.rna.ccrand, plot = T, use.u = T)#residuals don't fit
+testZeroInflation(test)#significant
+
+bac.rna.nullzi <- glmmTMB(Bacillus ~  1,
+                        data = data.gen.rna.t1.s , 
+                        family = nbinom1(link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1) 
+bac.rna.randzi <- glmmTMB(Bacillus ~  1 +(1|block2),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+bac.rna.ccrandzi <- glmmTMB(Bacillus ~  cc+(1|block2),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+bac.rna.cczi <- glmmTMB(Bacillus ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+bac.rna.ccblzi <- glmmTMB(Bacillus ~  cc+ block2,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1) #best fit
+
+anova(bac.rna.nullzi,bac.rna.randzi,bac.rna.ccrandzi, bac.rna.cczi, bac.rna.ccblzi) 
+test <- simulateResiduals(fittedModel = bac.rna.ccblzi, plot = T)
+testZeroInflation(test)
+
+#block 2 non-significant, readcount significant = select model with offset without random
+bac.rna.ccrandzi <- glmmTMB(Bacillus ~  cc+(1|block2),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1) #best fit but p values don't change much - keep model with random effect
+summary(bac.rna.ccrandzi)
+knitr::kable(summary(bac.rna.ccrandzi)$coefficients, digits = 4)
+car::Anova (bac.rna.ccrandzi)
+
+#check model
+test <- simulateResiduals(fittedModel = bac.rna.ccrandzi, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(bac.rna.ccrandzi)
+
+ref_grid(bac.rna.ccrandzi)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(bac.rna.ccrandzi, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Rhizobium
+```{r}
+data.gen.rna.t1.s$Rhizobium
+#######with glmtmb
+hist(data.gen.rna.t1.s$Rhizobium)
+boxplot(data.gen.rna.t1.s$Rhizobium ~ data.gen.rna.t1.s$cc)
+boxplot(data.gen.rna.t1.s$Rhizobium ~ data.gen.rna.t1.s$pre.crop)
+boxplot(data.gen.rna.t1.s$Rhizobium ~ data.gen.rna.t1.s$block2)
+#normal?
+shapiro.test(data.gen.rna.t1.s$Rhizobium)#yes
+library(vcd)
+distplot(data.gen.rna.t1.s$Rhizobium, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t1.s$Rhizobium, type = "nbinomial")
+
+#Check if readcount is significant
+rhiz.rna.readcount <- glmmTMB(Rhizobium ~ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(rhiz.rna.readcount)
+car::Anova(rhiz.rna.readcount)
+test <- simulateResiduals(fittedModel = rhiz.rna.readcount, plot = T, use.u = T)
+testZeroInflation(test)
+#readcount is significant but doesn't fit
+
+#Check if block is significant
+rhiz.rna.block <- glmmTMB(Rhizobium ~  block2, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.rna.block)
+car::Anova(rhiz.rna.block)
+test <- simulateResiduals(fittedModel = rhiz.rna.block, plot = T, use.u = T)
+#block2 is not significant but doesn't fit
+
+#Check if prec crops is significant
+rhiz.rna.pc <- glmmTMB(Rhizobium ~  pre.crop, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.rna.pc)
+car::Anova(rhiz.rna.pc)
+test <- simulateResiduals(fittedModel = rhiz.rna.pc, plot = T, use.u = T)
+#block2 is not significant but doesn't fit
+
+rhiz.rna.complete <- glmmTMB(Rhizobium ~  log(readcount.tot)+ cc + pre.crop + block2, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(rhiz.rna.complete)
+car::Anova(rhiz.rna.complete)
+test <- simulateResiduals(fittedModel = rhiz.rna.complete, plot = T, use.u = T)
+#doesn't fit
+#Add zero inflation (1 zero instead of zero?)
+
+#test for cc
+rhiz.rna.null <- glmmTMB(Rhizobium ~  1,
+                        data = data.gen.rna.t1.s , 
+                        family = nbinom1(link = "log"),
+                        offset = log(readcount.tot)) 
+rhiz.rna.cc <- glmmTMB(Rhizobium ~  cc,
+                        data = data.gen.rna.t1.s , 
+                        family = nbinom1(link = "log"),
+                       offset = log(readcount.tot)) 
+test <- simulateResiduals(fittedModel = rhiz.rna.null, plot = T)
+#no fit at al, change distribution?
+#Poisson = no way
+
+anova(rhiz.rna.rand, rhiz.rna.ccrand, rhiz.rna.ccrandoff, rhiz.rna.ccoff,rhiz.rna.complete,rhiz.rna.ccrand2off,rhiz.rna.ccrandpcoff) 
+test <- simulateResiduals(fittedModel = rhiz.rna.ccoff, plot = T)
+
+#block 2 non-significant, pre crop = ns, readcount significant = select model with offset
+rhiz.rna.ccoff <- glmmTMB(Rhizobium ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+knitr::kable(summary(rhiz.rna.ccoff)$coefficients, digits = 4)
+summary(rhiz.rna.ccoff)
+car::Anova(rhiz.rna.ccoff)
+
+#check model
+test <- simulateResiduals(fittedModel = rhiz.rna.ccrandpcoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(rhiz.rna.ccrandpcoff)
+rhiz.rna.ccrand_coef <- cbind(coef(summary(rhiz.rna.ccrandoff)),
+                       confint(rhiz.rna.ccrandoff))
+
+ref_grid(rhiz.rna.ccoff)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(rhiz.rna.ccoff, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Variovorax
+```{r}
+data.gen.rna.t1.s$Variovorax
+plot(data.gen.rna.t1.s$Variovorax~data.gen.rna.t1.s$cc)
+plot(data.gen.rna.t1.s$Variovorax~data.gen.rna.t1.s$pre.crop)
+#######with glmtmb
+hist(data.gen.rna.t1.s$Variovorax)
+boxplot(data.gen.rna.t1.s$Variovorax ~ data.gen.rna.t1.s$cc)
+#normal?
+shapiro.test(data.gen.rna.t1.s$Variovorax)#no
+library(vcd)
+distplot(data.gen.rna.t1.s$Variovorax, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t1.s$Variovorax, type = "nbinomial")
+
+#Check if readcount is significant
+var.rna.readcount <- glmmTMB(Variovorax ~ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(var.rna.readcount)
+car::Anova(var.rna.readcount)
+test <- simulateResiduals(fittedModel = var.rna.readcount, plot = T, use.u = T)
+#readcount is significant but doesn't fit
+
+#Check if block is significant
+var.rna.block <- glmmTMB(Variovorax ~  block2+log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.rna.block)
+car::Anova(var.rna.block)
+test <- simulateResiduals(fittedModel = var.rna.block, plot = T, use.u = T)
+#block2 is non significant but doesn't fit
+
+#Check if pre crop is significant
+var.rna.pc <- glmmTMB(Variovorax ~  pre.crop, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.rna.pc)
+car::Anova(var.rna.pc)
+test <- simulateResiduals(fittedModel = var.rna.pc, plot = T, use.u = T)
+#pre crop is non significant and fits
+
+
+#Check if pc + block
+var.rna.pcbl <- glmmTMB(Variovorax ~  pre.crop + block2, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.rna.pcbl)
+car::Anova(var.rna.pcbl)
+test <- simulateResiduals(fittedModel = var.rna.pcbl, plot = T, use.u = T)
+#pre crop and block are non significant
+
+#Check with cc is significant with pre crop
+var.rna.completepc <- glmmTMB(Variovorax ~  log(readcount.tot)+ cc + pre.crop , 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.rna.completepc)
+car::Anova(var.rna.completepc)
+test <- simulateResiduals(fittedModel = var.rna.completepc, plot = T, use.u = T)
+#no sign doesnt fit
+
+#check 
+var.rna.completebl <- glmmTMB(Variovorax ~  log(readcount.tot)+ cc + block2 , 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.rna.completebl)
+car::Anova(var.rna.completebl)
+test <- simulateResiduals(fittedModel = var.rna.completebl, plot = T, use.u = T)
+#non significant doesn't fit
+
+#Check if cc is significant
+var.rna.complete <- glmmTMB(Variovorax ~  log(readcount.tot)+ cc + pre.crop + block2, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(var.rna.complete)
+car::Anova(var.rna.complete)
+test <- simulateResiduals(fittedModel = var.rna.complete, plot = T, use.u = T)
+#readcount and cc significant, fits
+
+#test for pre crops
+var.rna.nulloff <- glmmTMB(Variovorax ~  1,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+var.rna.ccoff <- glmmTMB(Variovorax ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+var.rna.ccrand2off <- glmmTMB(Variovorax ~  cc + (1|block2)+ (1|pre.crop),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+var.rna.ccrandpcoff <- glmmTMB(Variovorax ~  cc + (1|pre.crop),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+var.rna.ccrandbloff <- glmmTMB(Variovorax ~  cc + (1|block2),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot))
+
+anova(var.rna.nulloff, var.rna.ccoff, var.rna.ccrandpcoff, var.rna.ccrandbloff) 
+test <- simulateResiduals(fittedModel = var.rna.ccrandbloff, plot = T)
+testZeroInflation(test) #significant
+
+var.rna.nulloffzi <- glmmTMB(Variovorax ~  1,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+var.rna.ccoffzi <- glmmTMB(Variovorax ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+anova(var.rna.nulloffzi, var.rna.ccoffzi) 
+test <- simulateResiduals(fittedModel = var.rna.ccoffzi, plot = T) #perfect
+
+#selected
+var.rna.ccoffzi <- glmmTMB(Variovorax ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"), 
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+
+knitr::kable(summary(var.rna.ccoffzi)$coefficients, digits = 4)
+summary(var.rna.ccoffzi)
+car::Anova(var.rna.ccoffzi)
+
+#check model
+test <- simulateResiduals(fittedModel = var.rna.ccoffzi, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(var.rna.ccoffzi)
+testZeroInflation(test)
+var.rna.ccrand_coef <- cbind(coef(summary(var.rna.ccoffzi)),
+                       confint(var.rna.ccoffzi))
+
+ref_grid(var.rna.ccoffzi)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(var.rna.ccoffzi, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Lysobacter
+```{r}
+data.gen.rna.t1.s$Lysobacter
+plot(data.gen.rna.t1.s$Lysobacter~data.gen.rna.t1.s$cc)
+plot(data.gen.rna.t1.s$Lysobacter~data.gen.rna.t1.s$pre.crop)
+plot(data.gen.rna.t1.s$Lysobacter)
+hist(data.gen.rna.t1.s$Lysobacter)
+#normal?
+shapiro.test(data.gen.rna.t1.s$Lysobacter)#no
+library(vcd)
+distplot(data.gen.rna.t1.s$Lysobacter, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t1.s$Lysobacter, type = "nbinomial")
+
+#Check if readcount is significant
+lys.rna.readcount <- glmmTMB(Lysobacter ~ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(lys.rna.readcount)
+car::Anova(lys.rna.readcount)
+test <- simulateResiduals(fittedModel = lys.rna.readcount, plot = T, use.u = T)
+testZeroInflation(test)#significantt
+#readcount is not significant but residuals doesn't fit
+
+#readcount with zero inflation
+lys.rna.readcountzi <- glmmTMB(Lysobacter ~ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom2(link = "log"),
+                         ziformula = ~1)
+summary(lys.rna.readcountzi)
+car::Anova(lys.rna.readcountzi)
+test <- simulateResiduals(fittedModel = lys.rna.readcountzi, plot = T, use.u = T)
+#readcount is not significant but residuals doesn't fit
+
+
+#Check if block is significant
+lys.rna.block <- glmmTMB(Lysobacter ~  block2, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(lys.rna.block)
+car::Anova(lys.rna.block)
+test <- simulateResiduals(fittedModel = lys.rna.block, plot = T, use.u = T)
+#block2 is not significant but it doesn't fit
+
+#Check if pre crop is significant
+lys.rna.pc <- glmmTMB(Lysobacter ~  pre.crop, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(lys.rna.pc)
+car::Anova(lys.rna.pc)
+test <- simulateResiduals(fittedModel = lys.rna.pc, plot = T, use.u = T)
+#pre crop is not significant
+
+#Check if pre crop and block explain more with cc 
+lys.rna.complete <- glmmTMB(Lysobacter ~  log(readcount.tot)+pre.crop+block2+cc, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(lys.rna.complete)
+car::Anova(lys.rna.complete)
+test <- simulateResiduals(fittedModel = lys.rna.complete, plot = T, use.u = T)
+#no fit
+
+#Check if block explain more with cc 
+lys.rna.completebl <- glmmTMB(Lysobacter ~  log(readcount.tot)+block2+cc, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(lys.rna.completebl)
+car::Anova(lys.rna.completebl)
+test <- simulateResiduals(fittedModel = lys.rna.completebl, plot = T, use.u = T)
+#no fit
+
+#Check if pre crop explain more with cc 
+lys.rna.completepc <- glmmTMB(Lysobacter ~  log(readcount.tot)+pre.crop+cc, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(lys.rna.completepc)
+car::Anova(lys.rna.completepc)
+test <- simulateResiduals(fittedModel = lys.rna.completepc, plot = T, use.u = T)
+#no fits
+
+#Check if cc explain more without block and pre crops 
+lys.rna.recc <- glmmTMB(Lysobacter ~  log(readcount.tot)+cc, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"),
+                         ziformula = ~1)
+summary(lys.rna.recc)
+car::Anova(lys.rna.recc)
+test <- simulateResiduals(fittedModel = lys.rna.recc, plot = T, use.u = T)
+#nope, best fit is when pre crop is added 
+testZeroInflation(test) #possible zero inflation
+
+
+#test for cc with offset
+lys.rna.ccoff <- glmmTMB(Lysobacter ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = lys.rna.ccoff, plot = T)
+testZeroInflation(test)
+
+lys.rna.ccoffzi <- glmmTMB(Lysobacter ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.rna.ccoffzi, plot = T)
+
+lys.rna.ccoffrandzi <- glmmTMB(Lysobacter ~  cc + (1|pre.crop) ,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.rna.ccoffrandzi, plot = T)
+
+lys.rna.null <- glmmTMB(Lysobacter ~  1 ,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.rna.null, plot = T)
+
+anova(lys.rna.null,lys.rna.ccoffrandzi, lys.rna.ccoffzi, lys.rna.ccoff)
+
+lys.rna.ccoffzi <- glmmTMB(Lysobacter ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = lys.rna.ccoffzi, plot = T)
+knitr::kable(summary(lys.rna.ccoffzi)$coefficients, digits = 4)
+summary(lys.rna.ccoffzi)
+car::Anova(lys.rna.ccoffzi)
+
+#check model
+test <- simulateResiduals(fittedModel = lys.rna.ccoffzi, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(lys.rna.ccoffzi)
+lys.rna.ccrand_coef <- cbind(coef(summary(lys.rna.ccoffzi)),
+                       confint(lys.rna.ccoffzi))
+
+ref_grid(lys.rna.ccoffzi)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(lys.rna.ccoffzi, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Pseudomonas
+```{r}
+data.gen.rna.t1.s$Pseudomonas
+plot(data.gen.rna.t1.s$Pseudomonas~data.gen.rna.t1.s$cc)
+plot(data.gen.rna.t1.s$Pseudomonas~data.gen.rna.t1.s$pre.crop)
+plot(data.gen.rna.t1.s$Pseudomonas)
+#######with glmtmb
+hist(data.gen.rna.t1.s$Pseudomonas)
+#normal?
+shapiro.test(data.gen.rna.t1.s$Pseudomonas)#no
+library(vcd)
+distplot(data.gen.rna.t1.s$Pseudomonas, type = "poisson") #fits a poisson
+distplot(data.gen.rna.t1.s$Pseudomonas, type = "nbinomial")
+
+#Check if readcount is significant
+pse.rna.readcount <- glmmTMB(Pseudomonas ~ log(readcount.tot), 
+                         data = data.gen.rna.t1.s , 
+                         family = nbinom1(link = "log"))
+summary(pse.rna.readcount)
+car::Anova(pse.rna.readcount)
+test <- simulateResiduals(fittedModel = pse.rna.readcount, plot = T, use.u = T)
+#readcount is significant 
+
+#Check if block is significant
+pse.rna.block <- glmmTMB(Pseudomonas ~  block2, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(pse.rna.block)
+car::Anova(pse.rna.block)
+test <- simulateResiduals(fittedModel = pse.rna.block, plot = T, use.u = T)
+#block2 is non-significant 
+
+#Check if pre crop is significant
+pse.rna.pc <- glmmTMB(Pseudomonas ~  pre.crop, 
+                         data = data.gen.rna.t1.s , 
+                         family =  nbinom1(link = "log"))
+summary(pse.rna.pc)
+car::Anova(pse.rna.pc)
+test <- simulateResiduals(fittedModel = pse.rna.pc, plot = T, use.u = T)
+#pre crop is non-significant 
+
+#test for cc
+pse.rna.null<- glmmTMB(Pseudomonas ~  1,
+                        data = data.gen.rna.t1.s , 
+                        family = nbinom1(link = "log")) 
+pse.rna.off <- glmmTMB(Pseudomonas ~  1,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+pse.rna.ccoff <- glmmTMB(Pseudomonas ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.rna.ccoff, plot = T)
+testZeroInflation(test) #could be zero inflated
+
+anova(pse.rna.null, pse.rna.ccoff, pse.rna.off) 
+
+pse.rna.ccoffzi <- glmmTMB(Pseudomonas ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = pse.rna.ccoffzi, plot = T)
+#doesn't fit
+
+pse.rna.ccoffrand2 <- glmmTMB(Pseudomonas ~  cc+(1|block2)+(1|pre.crop),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.rna.ccoffrand2, plot = T)
+
+pse.rna.ccoffrandpc <- glmmTMB(Pseudomonas ~  cc+(1|pre.crop),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.rna.ccoffrandpc, plot = T)
+
+pse.rna.ccoffrandbl <- glmmTMB(Pseudomonas ~  cc+(1|block2),
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.rna.ccoffrandbl, plot = T)
+#none works
+
+pse.rna.ccoffpcbl <- glmmTMB(Pseudomonas ~  cc+pre.crop+block2,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.rna.ccoffpcbl, plot = T)
+
+pse.rna.ccoffbl <- glmmTMB(Pseudomonas ~  cc+block2,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.rna.ccoffbl, plot = T)
+
+pse.rna.ccoffpc <- glmmTMB(Pseudomonas ~  cc+pre.crop,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+test <- simulateResiduals(fittedModel = pse.rna.ccoffpc, plot = T)
+
+pse.rna.ccre <- glmmTMB(Pseudomonas ~  log(readcount.tot)+cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = pse.rna.ccre, plot = T)
+#only way to make it work is by putting readcount as fixed effect
+knitr::kable(summary(pse.rna.ccre)$coefficients, digits = 4)
+summary(pse.rna.ccre)
+car::Anova(pse.rna.ccre)
+
+#the most correct one - biologically :
+pse.rna.ccoffzi <- glmmTMB(Pseudomonas ~  cc,
+                      data = data.gen.rna.t1.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+test <- simulateResiduals(fittedModel = pse.rna.ccoffzi, plot = T)
+knitr::kable(summary(pse.rna.ccoffzi)$coefficients, digits = 4)
+summary(pse.rna.ccoffzi)
+car::Anova(pse.rna.ccoffzi)
+#between model with offset and model without I have very small differences i np values and all p values have same significances, so I keep this model
+
+#check model
+test <- simulateResiduals(fittedModel = pse.rna.ccoff, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(pse.rna.ccoff)
+
+ref_grid(pse.rna.ccoffzi)
+#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
+emm.res <- emmeans(pse.rna.ccoffzi, "cc", type = "response", offset = 0)
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+
+#######################################################################################################Helena##################################################################
+
+HELENA
+```{r}
+data.gen.dna.t0.s$Bacillus
+plot(data.gen.dna.t0.s$Bacillus)
+hist(data.gen.dna.t0.s$Bacillus)
+install.packages('vcd')
+library(vcd)
+distplot(data.gen.dna.t0.s$Bacillus, type = "poisson")
+distplot(data.gen.dna.t0.s$Bacillus, type = "nbinomial")
+library(lme4)
+attach(data.gen.dna.s)
+model1 <- glmer(Bacillus ~ pre.crop + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"))
+test <- simulateResiduals(fittedModel = model1, plot = T, use.u = T)
+model2 <- glmmTMB(Bacillus ~ pre.crop + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+test <- simulateResiduals(fittedModel = model2, plot = T, use.u = T)
+
+
+
+modelstart <- glmmTMB(Bacillus ~ 1 + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+modelcrop <- glmmTMB(Bacillus ~ pre.crop + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+modelMC <- glmmTMB(Bacillus ~ log1p(McT0) + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+modelcropMC <- glmmTMB(Bacillus ~ pre.crop*log1p(McT0) + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+modelstartoff <- glmmTMB(Bacillus ~ 1 + offset(log(readcount.tot)) + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+modelcropoff <- glmmTMB(Bacillus ~ pre.crop + offset(log(readcount.tot)) + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+modelMCoff <- glmmTMB(Bacillus ~ log1p(McT0) + offset(log(readcount.tot)) + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+modelcropMCoff <- glmmTMB(Bacillus ~ pre.crop*log1p(McT0)+ offset(log(readcount.tot)) + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+anova(modelstart, modelcrop, modelMC, modelcropMC, modelstartoff, modelcropoff, modelMCoff, modelcropMCoff)
+
+
+modelcropMCoffboth <- glmmTMB(Bacillus ~ pre.crop + log1p(McT0) + pre.crop*log1p(McT0)+ offset(log(readcount.tot)) + (1|block2), data = data.gen.dna.t0.s, family = poisson(link = "log"), dispformula = ~-1)
+
+anova(modelcropMCoff, modelcropMCoffboth)
+
+test <- simulateResiduals(fittedModel = modelcropMCoff, plot = T, use.u = T)
+
+car::Anova(modelcropMCoffboth)
+car::Anova(modelcropoff)
+test <- simulateResiduals(fittedModel = modelcropoff, plot = T, use.u = T)
+
+```
+
+
+```{r}
+shapiro.test(data.gen.dna.t0.s$Bacillus/data.gen.dna.t0.s$readcount.tot)
+shapiro.test(log(data.gen.dna.t0.s$Bacillus/data.gen.dna.t0.s$readcount.tot))
+
+
+lmstart <- lmer(log(Bacillus/readcount.tot) ~ 1 + (1|block2) + (1|pre.crop), data = data.gen.dna.t0.s)
+
+lmMC <- lmer(log(Bacillus/readcount.tot) ~ log1p(McT0) + (1|block2) + (1|pre.crop), data = data.gen.dna.t0.s)
+
+anova(lmstart, lmcrop, lmMC, lmcropMC)
+
+test <- simulateResiduals(fittedModel = lmcropMC, plot = T, use.u = T)
+attach(data.gen.dna.t0.s)
+hist(log(Bacillus/readcount.tot))
+hist(log(Bacillus))
+hist(Bacillus)
+
+```
+
+
+```{r}
+ModelplotMCrandom <- glmmTMB(Bacillus ~ log1p(McT0) + offset(log(readcount.tot)) + (1|block2) + (1|pre.crop), data = data.gen.dna.t0.s, family = poisson(link = "log"))
+
+test <- simulateResiduals(fittedModel = ModelplotMCrandom, plot = T, use.u = T)
+
+car::Anova(ModelplotMCrandom)
+
+ModelplotMCrandom <- glmer.nb(Rhizobium ~ log1p(McT0) + offset(log(readcount.tot)) + (1|block2) + (1|pre.crop), data = data.gen.dna.t0.s)
+test <- simulateResiduals(fittedModel = ModelplotMCrandom, plot = T, use.u = T)
+
+hist(Rhizobium)
+shapiro.test(Rhizobium)
+```
+
+
+
+
+```{r}
+shapiro.test(residuals(lmcropMC))
+res <- residuals(bact.lm3.2) 
+ggqqplot(res)
+shapiro.test(res)
+ggdensity(res)
+```
+
+##############
+
+
+Bacillus
+```{r}
+#######with glmtmb
+hist(data.gen.dna.t0.s$Bacillus)
+boxplot(data.gen.dna.t0.s$Bacillus ~ data.gen.dna.t0.s$pre.crop)
+#normal?
+shapiro.test(data.gen.dna.t0.s$Bacillus)
+library(vcd)
+distplot(data.gen.dna.t0.s$Bacillus, type = "poisson") #fits a poisson
+distplot(data.gen.dna.t0.s$Bacillus, type = "nbinomial")
+
+#Check if readcount is significant
+bac.dna.readcount <- glmmTMB(Bacillus ~ log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family = nbinom1(link = "log"))
+summary(bac.dna.readcount)
+car::Anova(bac.dna.readcount)
+test <- simulateResiduals(fittedModel = bac.dna.readcount, plot = T, use.u = T)
+#readcount is not significant
+
+#Check if block is significant
+bac.dna.block <- glmmTMB(Bacillus ~  block2 + log(readcount.tot), 
+                         data = data.gen.dna.t0.s , 
+                         family =  nbinom1(link = "log"))
+summary(bac.dna.block)
+car::Anova(bac.dna.block)
+test <- simulateResiduals(fittedModel = bac.dna.block, plot = T, use.u = T)
+#block2 is significant, readcount is not significant
+
+
+#test for pre crops
+bac.dna.rand <- glmmTMB(Bacillus ~  1 +(1|block2),
+                        data = data.gen.dna.t0.s , 
+                        family = nbinom1(link = "log")) 
+bac.dna.pcrand <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+bac.dna.pcrandoff <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"),
+                      offset = log(readcount.tot))
+anova(bac.dna.rand, bac.dna.pcrand, bac.dna.pcrandoff) 
+test <- simulateResiduals(fittedModel = bac.dna.pcrandoff, plot = T)
+
+#without offset
+bac.dna.pcrandread <- glmmTMB(Bacillus ~  pre.crop+(1|block2)+(1|readcount.tot),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+bac.dna.pcrandnoread <- glmmTMB(Bacillus ~  pre.crop+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+anova(bac.dna.pcrandread, bac.dna.pcrandnoread)
+
+#### with MC T0
+
+#block 2 significant, readcount ns= select model without offset
+bac.dna.pcrand <- glmmTMB(Bacillus ~  log(McT0)+(1|block2),
+                      data = data.gen.dna.t0.s , 
+                      family = nbinom1 (link = "log"))
+summary(bac.dna.pcrand)
+knitr::kable(summary(bac.dna.pcrand)$coefficients, digits = 4)
+car::Anova (bac.dna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = bac.dna.pcrand, plot = T)
+testResiduals(test, plot = T)
+test_dispersion <- testDispersion(bac.dna.pcrand)
+bac.dna.pcrand_coef <- cbind(coef(summary(bac.dna.pcrand)),
+                       confint(bac.dna.pcrand))
+
+
+
+#block is significant, readcount no, so re crop is modeled on nb without offset. Pre crop are not significant
+```
+
