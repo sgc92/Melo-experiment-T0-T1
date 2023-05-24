@@ -1,0 +1,217 @@
+---
+title: "trial microbiome"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+library(hrbrthemes)
+library(microbiome)
+library(dplyr)
+library(phyloseq)
+library(hrbrthemes)
+library(gcookbook)
+library(tidyverse)
+library(ggplot2)
+library(RColorBrewer)
+library(metagMisc)
+```
+
+```{r}
+load (file = 'ps-selected-only-bact-filt-lowabd-no-neg-norep2.RData')
+ps.bact@sam_data$pre.crop <- fct_relevel(ps.bact@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ps.bact@sam_data$cc <- fct_relevel(ps.bact@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","PHA.OSR_T", "VE.OSR_T", "BO.OSR_T", "BO.OSR_R")
+```
+
+
+```{r}
+ps.bact.t1 <- subset_samples(ps.bact, time.point == "T1")
+ps.bact.t1 = prune_taxa(taxa_sums(ps.bact.t1) > 0, ps.bact.t1)
+ps.bact.t1
+sample_names(ps.bact.t1)
+
+ps.bact.t1.dna <- subset_samples(ps.bact.t1, nucleic.acid == "DNA")
+ps.bact.t1.dna = prune_taxa(taxa_sums(ps.bact.t1.dna) > 0, ps.bact.t1.dna)
+ps.bact.t1.dna
+
+ps.bact.t1.rna <- subset_samples(ps.bact.t1, nucleic.acid == "RNA")
+ps.bact.t1.rna = prune_taxa(taxa_sums(ps.bact.t1.rna) > 0, ps.bact.t1.rna)
+ps.bact.t1.rna
+```
+
+Beta diversity analysis
+
+```{r}
+#reorder factors
+ps.bact.t1.dna@sam_data$cc <- fct_relevel(ps.bact.t1.dna@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","PHA.OSR_T", "VE.OSR_T", "BO.OSR_T", "BO.OSR_R")
+ps.bact.t1.dna@sam_data$cc <- as.factor(ps.bact.t1.dna@sam_data$cc)
+#define colours
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+#define shapes
+shapeCode1 <- c("monoculture" = 19, "mixture" = 15)
+```
+
+```{r}
+#transform ASV with CSS
+bact.dna_norm<- phyloseq_transform_css(ps.bact.t1.dna, norm = TRUE, log = FALSE)
+#ordinate
+ord.bact.dna_norm <- ordinate(bact.dna_norm, "PCoA", "bray")
+#plot PCoA
+plot.bact.dna_norm<- plot_ordination (bact.dna_norm, ord.bact.dna_norm, type = "sites",
+                                 color = "cc",
+                                 shape = "culture",
+                                 title = expression(paste("PERMANOVA: ", R^2, "=0.21; p=0.001")), label = NULL)+
+                                 geom_point(aes(shape=culture, fill = "cc"),  size = 3) + 
+  #guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  scale_shape_manual (values = shapeCode1) +
+  scale_color_manual(values = colorCode2) + 
+  scale_fill_manual(values = colorCode2)+
+  #scale_color_brewer(palette = "Paired")+
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE, alpha=0.5) +
+  #geom_text(aes(label = pre.crop), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=11),
+        axis.title.y = element_text(face="bold", colour="black", size=11),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+
+plot(plot.bact.dna_norm)
+#ggplotly(plot.bact.dna_norm)
+
+ggsave(file="./Bacteria /figures/PCoA T1 - Bacteria  dna.svg", 
+       plot=plot.bact.dna_norm, width=10, height=8, units = "in", device = "svg")
+```
+
+Test dispersion and permanova
+```{r}
+sampledf <- data.frame(sample_data(bact.dna_norm))
+bact.dna_norm_bray <- phyloseq::distance(bact.dna_norm, method = "bray")
+dispersion<-betadisper(bact.dna_norm_bray, group=sampledf$cc)
+permutest(dispersion) #0.422 Results show homogeonous dispersion
+plot(dispersion, hull=FALSE, ellipse=FALSE, label = FALSE) ##sd ellipse
+#PERMANOVA
+adonis2(bact.dna_norm_bray ~ block2+pre.crop * cc , data = sampledf, permutations = 999 )
+```
+
+Pairwise permanova - considering only cover crop
+```{r}
+library(RVAideMemoire)
+#for cover crop
+pairwise.perm.manova(distance(bact.dna_norm, "bray"), 
+                     fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = TRUE)
+```
+
+NOT USED IN PAPER:
+Pairwise permanova - considering block, pre crop and cover crop per each contrast
+```{r}
+sampledf.sel <- data.frame(cc=sampledf$cc)
+sampledf.sel$pre.crop <- sampledf$pre.crop
+sampledf.sel$block2 <- sampledf$block2
+rownames(sampledf.sel) <- row.names(sampledf)
+
+library(pairwiseAdonis)
+posthoc <- pairwise.adonis2(bact.dna_norm_bray~cc+pre.crop+block2, data=sampledf.sel, strata="cc" )
+posthoc
+```
+
+
+###RNA
+```{r}
+#transform ASVs in CSS
+bact.rna_norm<- phyloseq_transform_css(ps.bact.t1.rna, norm = TRUE, log = FALSE)
+#ordinate
+ord.bact.rna_norm <- ordinate(bact.rna_norm, "PCoA", "bray")
+#plot
+plot.bact.rna_norm<- plot_ordination (bact.rna_norm, ord.bact.rna_norm, type = "sites",
+                                 color = "cc",
+                                 shape = "culture",
+                                 title = expression(paste("PERMANOVA: ", R^2, "=0.23; p=0.001")), label = NULL)+
+                                 geom_point(aes(shape=culture),  size = 3) + 
+  guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  #scale_colour_brewer(palette = "Paired")+
+  scale_shape_manual (values = shapeCode1)+
+  scale_color_manual(values = colorCode2) + 
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE) +
+  #geom_text(aes(label = sample.id2), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=11),
+        axis.title.y = element_text(face="bold", colour="black", size=11),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+plot(plot.bact.rna_norm)
+
+ggsave(file="./Bacteria /figures/PCoA T1 - bacteria  rna.svg", 
+       plot=plot.bact.rna_norm, width=10, height=8, units = "in", device = "svg")
+```
+
+Test dispersion
+```{r}
+sampledf <- data.frame(sample_data(bact.rna_norm))
+bact.rna_norm_bray <- phyloseq::distance(bact.rna_norm, method = "bray")
+dispersion<-betadisper(bact.rna_norm_bray, group=sampledf$cc)
+permutest(dispersion) #0.571 Results show homogeonous dispersion
+plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
+
+#PERMANOVA
+library(pairwiseAdonis)
+sampledf <- data.frame(sample_data(bact.rna_norm))
+bact.rna_norm_bray <- phyloseq::distance(bact.rna_norm, method = "bray")
+adonis2(bact.rna_norm_bray ~ block2 + pre.crop * cc , data = sampledf)
+```
+
+Pairwise permanova - considering only cover crop
+```{r}
+library(RVAideMemoire)
+#for cover crop
+pairwise.perm.manova(distance(bact.rna_norm, "bray"), 
+                     fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = FALSE)
+```
+
+#NOT USED IN PAPER
+Pairwise permanova - considering block, pre crop and cover crop per each contrast
+```{r}
+sampledf.sel <- data.frame(cc=sampledf$cc)
+sampledf.sel$pre.crop <- sampledf$pre.crop
+sampledf.sel$block2 <- sampledf$block2
+rownames(sampledf.sel) <- row.names(sampledf)
+
+posthoc <- pairwise.adonis2(bact.rna_norm_bray~cc+pre.crop+block2, data=sampledf.sel, strata="cc" )
+posthoc
+```
+
+Combine figures
+```{r}
+library(cowplot)
+legend <- get_legend(
+  # create some space to the left of the legend
+  plot.bact.rna_norm + theme(legend.box.margin = margin(0,0,10,5))
+)
+```
+
+Assemble all the plots and save
+```{r}
+library(cowplot)
+ figITS <- cowplot::plot_grid(
+   plot.bact.dna_norm + theme(legend.position="none", title = element_blank()), 
+   plot.bact.rna_norm + theme(legend.position="none", title = element_blank()),
+  nrow = 1, ncol = 2, scale = 1,
+  hjust = 1) 
+ figITS
+figITSL <- plot_grid(figITS, legend, rel_widths = c(2, 0.5)) 
+figITSL
+
+ggsave(file="./Bacteria /figures/PCoA T1- Bacteria  dna vs rna-ellipses.svg", plot=figITSL, 
+       width=150, height=100, units = "mm", device = "svg", scale=1.5)
+```
