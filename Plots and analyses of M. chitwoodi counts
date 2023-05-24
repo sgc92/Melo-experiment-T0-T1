@@ -1,0 +1,234 @@
+load packages
+```{r}
+library (ggplot2)
+library("dplyr")
+library(ggpubr)
+library(tidyr)
+```
+#load data
+```{r}
+Melo <- read.delim("C:/Users/cazza/OneDrive - WageningenUR/PhD - Silico work/Melo-T0-T1/PPN-melo-data/Results_Green manure_Mc_Vredepeel_Sara_R.txt",header = TRUE, sep = "\t",  dec=",")
+```
+change metadata
+```{r}
+Melo$cover.crop <- sub('Oilseed-Terranova','OSR-T',Melo$cover.crop)
+Melo$cover.crop <- sub('Oilseed-Adios','OSR-A',Melo$cover.crop)
+Melo$cover.crop <- sub('Bulk-T1','FW',Melo$cover.crop)
+Melo$cover.crop <- sub('Phacelia','PHA',Melo$cover.crop)
+Melo$cover.crop <- sub('PHA_OSR-T','PHA.OSR-T',Melo$cover.crop)
+Melo$cover.crop <- sub('Oilseed-Radical','OSR-R',Melo$cover.crop)
+Melo$cover.crop <- sub('Vetch_OSR-T','VE.OSR-T',Melo$cover.crop)
+Melo$cover.crop <- sub('Vetch','VE',Melo$cover.crop)
+Melo$cover.crop <- sub('BO_OSR-R','BO.OSR-R',Melo$cover.crop)
+Melo$cover.crop <- sub('BO_OSR-T','BO.OSR-T',Melo$cover.crop)
+Melo$cover.crop <- sub('Black-oat','BO',Melo$cover.crop)
+
+Melo$pre.crop <- sub('black oat','bo',Melo$pre.crop)
+Melo$pre.crop <- sub('rye','ry',Melo$pre.crop)
+Melo$pre.crop <- sub('italian rygrass','ir',Melo$pre.crop)
+Melo$pre.crop <- sub('english rygrass','er',Melo$pre.crop)
+
+Melo$cover.crop
+Melo$cover.crop <- sub('BO_OSR-R','BO.OSR-R',Melo$cover.crop)
+Melo$cover.crop <- sub('BO_OSR-T','BO.OSR-T',Melo$cover.crop)
+
+Melo$pre.crop
+```
+
+
+reorder pre-crops from High Pi to low Pi
+```{r}
+Melo$pre.crop = factor(Melo$pre.crop, levels=c("bo", "ry", "ir","er"))
+```
+
+colour blind colours
+```{r}
+library(wesanderson)
+a <- wes_palette("Darjeeling1", n=4, type = "discrete")
+a #check the colour codes in Values
+```
+
+Plot M. chitwoodi counts at T0
+```{r}
+my_title1 <- expression(paste(italic("M. chitwoodi"), " population after pre crop"))
+my_y_title1 <- expression(paste("log ", italic("M. chitwoodi"), " counts / 100 g soil"))
+                          
+pi <- ggplot(Melo, aes( x=reorder(pre.crop, -(log1p(McT0))), y=(log1p(McT0)), colour = pre.crop)) + 
+  #geom_violin(width = 1.4, position = "dodge")+ #option to make violin plot
+  geom_boxplot(fatten = 5 , width = 0.7) +  #for violin plot : ,width = 0.1,alpha = 0.5
+  scale_color_manual(name = "pre.crop", values = c("#D55E00", "#E69F00", "gold2",  "#009E73"))+
+  #scale_x_discrete(labels = precrops)+
+  geom_point()+
+  theme_bw()+
+  theme(axis.text.y = element_text(size = 12, angle = 90, hjust=0.5),
+        axis.text.x = element_text(size = 15, angle = 0, hjust=0.5),
+        axis.title.y = element_text(colour="black", size=12),
+        axis.title.x = element_blank(),
+        legend.text = element_text(size = 12, colour = "black"),
+        legend.title = element_text(size = 12, face = "bold", colour = "black" ,hjust=0),
+        panel.background = element_rect(fill = "white", colour = "grey50"),
+        legend.position = "none",
+        title = element_text(size = 13)) +
+  labs(title=my_title1,
+       y = my_y_title1) 
+print (pi)
+
+#ggsave(file="./figures/Pi melo.svg", plot=pi, width=8, height=5,units = "in", device = "svg")
+#ggsave(file="./figures/Pi melo-violin.svg", plot=pi, width=8, height=5,units = "in", device = "svg")
+```
+
+Calculate quantiles and median of Pi per pre-crop
+```{r}
+T0 <- Melo %>%
+  group_by(pre.crop) %>%
+  summarise(count = n(),
+          qs1 = log1p(quantile(McT0,prob = 0.25)),
+          qs2 = log1p(quantile(McT0,prob = 0.75)),
+          med = log1p(median(McT0)))
+T0$pre.crop = factor(T0$pre.crop, levels=c("bo", "ry", "ir","er"))
+print(T0)
+```
+
+
+```{r}
+Melo$pre.crop = factor(Melo$pre.crop, levels=c("bo", "ry", "ir","er")) #rerrange dataset
+Melo$cover.crop = factor(Melo$cover.crop, levels= c("BO", "BO.OSR-T", "BO.OSR-R", "VE", "PHA.OSR-T", "VE.OSR-T","PHA", "OSR-T", "OSR-R", "OSR-A", "FW")) #order following cover crop order
+
+my_title2 <- expression(paste(italic("M. chitwoodi"), " population after cover crops")) 
+my_y_title2 <- expression(paste("log ", italic("M. chitwoodi"), " counts / 100 g soil"))
+
+
+p2 <- ggplot(Melo, aes( x=cover.crop, y=(log1p(McT1)))) + 
+  geom_hline(aes(yintercept = med), T0, 
+             colour = "#666666", size = 0.8, linetype = "solid") +
+      geom_hline(aes(yintercept = qs1), T0, 
+                 colour = "#999999", size = 0.5, linetype = "dotdash") + 
+      geom_hline(aes(yintercept = qs2), T0, 
+                 colour = "#999999", size = 0.5, linetype = "dotdash") +#fill = pre.crop,
+  geom_boxplot(fatten = 3, aes (colour = pre.crop)) + 
+  scale_color_manual(name = "pre.crop", values = c("#D55E00", "#E69F00", "gold2", "#009E73"))+
+  scale_fill_manual(name = "pre.crop", values = c("#D55E00", "#E69F00", "gold2", "#009E73"))+
+  #geom_point(size=1, alpha=0.9, colour = "black") +
+  #scale_x_discrete(labels = covercrops)+
+  theme_bw()+
+  theme(axis.text.y = element_text(size = 8, angle = 90, hjust=0.5),
+        axis.text.x = element_text(size = 10, angle = 90, hjust = 1, vjust = 0.5),
+        axis.title.y = element_text(colour="black", size=12),
+        axis.title.x = element_blank(),
+        legend.text = element_text(size = 12, colour = "black"),
+        legend.title = element_text(size = 12, face = "bold", colour = "black" ,hjust=0),
+        legend.position = "none",
+        panel.background = element_rect(fill = "white", colour = "grey50"),
+        #panel.grid = element_line(colour = "grey10"),
+        title = element_text(size = 15)) +
+  labs(title=my_title2, 
+       y = my_y_title2, 
+       x = "cover crops") +
+  facet_wrap(~pre.crop, nrow = 1, scales = "fixed") 
+                 
+print (p2)
+#ggsave(file="./figures/Pf melo per pre crop-one line.svg", plot=p2, width=170, height=120, scale = 1.2, units = "mm", device = "svg")
+```
+
+
+##Statistical analyses
+
+Model T0
+```{r}
+library(glmmTMB)
+library(jtools)
+library(emmeans)
+library(DHARMa)
+library(multcomp)
+
+#model
+T0mod <- glmmTMB(McT0 ~ pre.crop + (1|blocks), data = Melo,
+                 family = nbinom1)
+summary(T0mod)
+car::Anova(T0mod)
+knitr::kable(summary(T0mod)$coefficients, digits = 4)
+
+#pairwise
+T0.pairs <- emmeans (T0mod, "pre.crop", type = "response")
+T0.pairs
+knitr::kable(T0.pairs, digits = 4)
+pairs(T0.pairs,reverse = TRUE, adjust = "BH")
+
+plot(T0.pairs, comparisons = TRUE)
+
+cld_pc <- cld(T0.pairs, Letters = letters, alpha = 0.05, sort= TRUE,reverse = TRUE)
+cld_pc
+
+#check model
+testDispersion(T0mod)
+simulationOutput <- simulateResiduals(fittedModel = T0mod, plot = T)
+test
+```
+
+```{r}
+#model
+T1mod <- glmmTMB(McT1 ~ pre.crop * cover.crop + (1|blocks), data = Melo,
+                 family = nbinom2)
+summary(T1mod)
+car::Anova(T1mod, type = "III")
+
+#check model
+testDispersion(T1mod)
+simulationOutput1 <- simulateResiduals(fittedModel = T1mod, plot = T)
+```
+#interaction is significant - make models per each pre-crop
+
+#divide per pre.crop
+Black oat
+```{r}
+Melo.bo <- Melo %>% dplyr::filter(pre.crop == "bo")
+
+T1mod.bo <- glmmTMB(McT1 ~ cover.crop + (1|blocks), data = Melo.bo,
+                 family = nbinom2)
+
+car::Anova(T1mod.bo)
+T1bo.pairs <- emmeans (T1mod.bo, "cover.crop", type = "response")
+
+cld_Bo <- cld(T1bo.pairs, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+cld_Bo
+```
+
+Rye
+```{r}
+Melo.ry <- Melo %>% dplyr::filter(pre.crop == "ry")
+T1mod.ry <- glmmTMB(McT1 ~ cover.crop + (1|blocks), data = Melo.ry,
+                 family = nbinom2)
+
+car::Anova(T1mod.ry)
+T1ry.pairs <- emmeans (T1mod.ry, "cover.crop", type = "response")
+
+cld_Ry <- cld(T1ry.pairs, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+cld_Ry
+```
+
+Italian ryegrass
+```{r}
+Melo.ir <- Melo %>% dplyr::filter(pre.crop == "ir")
+T1mod.ir <- glmmTMB(McT1 ~ cover.crop + (1|blocks), data = Melo.ir,
+                 family = nbinom2)
+
+car::Anova(T1mod.ir)
+T1ir.pairs <- emmeans (T1mod.ir, "cover.crop", type = "response")
+pairs (T1ir.pairs, adjust = "BH")
+summ(T1ir.pairs)
+cld_Ir <- cld(T1ir.pairs, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+cld_Ir
+```
+
+English ryegrass
+```{r}
+Melo.er <- Melo %>% dplyr::filter(pre.crop == "er")
+T1mod.er <- glmmTMB(McT1 ~ cover.crop + (1|blocks), data = Melo.er,
+                 family = nbinom2)
+
+car::Anova(T1mod.er)
+T1er.pairs <- emmeans (T1mod.er, "cover.crop", type = "response")
+
+cld_Er <- cld(T1er.pairs, Letters = letters, adjust = "BH", alpha = 0.05)
+cld_Er
+```
