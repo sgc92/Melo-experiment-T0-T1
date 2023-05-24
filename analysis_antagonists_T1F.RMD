@@ -1,0 +1,1734 @@
+---
+title: "antagonists T1"
+editor_options:
+  chunk_output_type: console
+---
+```{r}
+library(dplyr)
+library(phyloseq)
+library(ggpubr)
+library(microbiome)
+library(tidyr)
+library(forcats)
+library(RColorBrewer)
+library(vegan)
+library(forcats)
+library(metagMisc)
+```
+For beta diversity
+
+Genus
+```{r}
+load (file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
+ps.ITS.dna <- subset_samples(ps.ITS, nucleic.acid == "DNA" & time.point == "T1")
+ps.ITS.rna <- subset_samples(ps.ITS, nucleic.acid == "RNA" & time.point == "T1")
+
+ps.ITS.dna.mono <- subset_samples(ps.ITS, nucleic.acid == "DNA" & culture == "monoculture" & time.point == "T1")
+ps.ITS.rna.mono <- subset_samples(ps.ITS, nucleic.acid == "RNA" & culture == "monoculture" & time.point == "T1")
+
+library(metagMisc)
+```
+
+```{r}
+ant.fun.dna.gen.mono <- subset_taxa(ps.ITS.dna.mono, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.dna.gen.mono@sam_data$pre.crop <- fct_relevel(ant.fun.dna.gen.mono@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.dna.gen.mono@sam_data$cc <- fct_relevel(ant.fun.dna.gen.mono@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+ant.fun.rna.gen.mono <- subset_taxa(ps.ITS.rna.mono, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.rna.gen.mono@sam_data$pre.crop <- fct_relevel(ant.fun.rna.gen.mono@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.rna.gen.mono@sam_data$cc <- fct_relevel(ant.fun.rna.gen.mono@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+```
+
+Monocultures
+```{r}
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+shapeCode1 <- c("monoculture" = 19, "mixture" = 15)
+
+ps.ITS.dna.mono_css = phyloseq_transform_css(ant.fun.dna.gen.mono, norm = TRUE, log = FALSE)
+
+ant.fun.dna.gen.css.mono_bray <- ordinate(ps.ITS.dna.mono_css, "PCoA", "bray")
+plot_ant.fun.dna.gen.css.mono<- plot_ordination (
+  ps.ITS.dna.mono_css, 
+                                            ant.fun.dna.gen.css.mono_bray, type = "sites",
+                                 color = "cc",
+                                 #shape = "pre.crop",
+                                 title = expression(paste("PCoA antagonists - DNA")), label = NULL)+
+                                 geom_point(aes( fill = "cc"),  size = 3) + 
+  #guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  scale_shape_manual (values = shapeCode1) +
+  scale_color_manual(values = colorCode2) + 
+  scale_fill_manual(values = colorCode2)+
+  #scale_color_brewer(palette = "Paired")+
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE, alpha=0.5) +
+  #geom_text(aes(label = pre.crop), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=8),
+        axis.title.y = element_text(face="bold", colour="black", size=8),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+
+plot(plot_ant.fun.dna.gen.css.mono)
+
+#RNA
+ant.fun.rna.gen.mono1 <- prune_samples(sample_sums(ant.fun.rna.gen.mono) > 0, ant.fun.rna.gen.mono)
+ant.fun.rna.gen.mono1
+
+ps.ITS.rna.mono_css = phyloseq_transform_css(ant.fun.rna.gen.mono1, norm = TRUE, log = FALSE)
+
+
+ant.fun.rna.gen.css.mono_bray <- ordinate(ant.fun.rna.gen.mono1, "PCoA", "bray")
+plot_ant.fun.rna.gen.css.mono<- plot_ordination (
+  ps.ITS.rna.mono_css, 
+                                            ant.fun.rna.gen.css.mono_bray, type = "sites",
+                                 color = "cc",
+                                 #shape = "pre.crop",
+                                 title = expression(paste("PCoA antagonists - RNA")), label = NULL)+
+                                 geom_point(aes( fill = "cc"),  size = 3) + 
+  #guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  #scale_shape_manual (values = shapeCode0) +
+  scale_color_manual(values = colorCode2) + 
+  scale_fill_manual(values = colorCode2)+
+  #scale_color_brewer(palette = "Paired")+
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE, alpha=0.5) +
+  #geom_text(aes(label = pre.crop), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=8),
+        axis.title.y = element_text(face="bold", colour="black", size=8),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+
+plot(plot_ant.fun.rna.gen.css.mono)
+```
+
+PERMANOVA
+```{r}
+#DNA
+sampledf <- data.frame(sample_data(ps.ITS.dna.mono_css))
+ant.fun.dna.gen.css_bray <- phyloseq::distance(ps.ITS.dna.mono_css, method = "bray")
+dispersion<-betadisper(ant.fun.dna.gen.css_bray , group=sampledf$cc)
+permutest(dispersion) #0.891
+plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
+
+adonis2(ant.fun.dna.gen.css_bray ~ block2+pre.crop+cc , data = sampledf, permutations = 999 )
+
+#RNA
+sampledf <- data.frame(sample_data(ps.ITS.rna.mono_css))
+ant.fun.rna.gen.css_bray <- phyloseq::distance(subset_samples(ps.ITS.rna.mono_css, time.point == "T1"), method = "bray")
+dispersion<-betadisper(ant.fun.rna.gen.css_bray , group=sampledf$cc)
+permutest(dispersion) #0.0898
+plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
+
+adonis2(ant.fun.rna.gen.css_bray ~ block2+pre.crop+cc , data = sampledf, permutations = 999 )
+```
+
+
+
+ALL
+```{r}
+library(metagMisc)
+```
+
+
+```{r}
+ant.fun.dna.gen <- subset_taxa(ps.ITS.dna, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.dna.gen@sam_data$pre.crop <- fct_relevel(ant.fun.dna.gen@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.dna.gen@sam_data$cc <- fct_relevel(ant.fun.dna.gen@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+ant.fun.rna.gen <- subset_taxa(ps.ITS.rna, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.rna.gen@sam_data$pre.crop <- fct_relevel(ant.fun.rna.gen@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.rna.gen@sam_data$cc <- fct_relevel(ant.fun.rna.gen@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+```
+
+```{r}
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+shapeCode1 <- c("monoculture" = 19, "mixture" = 15)
+
+ant.fun.dna.gen_css = phyloseq_transform_css(ant.fun.dna.gen, norm = TRUE, log = FALSE)
+
+ant.fun.dna.gen.css_bray <- ordinate(ant.fun.dna.gen_css, "PCoA", "bray")
+plot_ant.fun.dna.gen.css<- plot_ordination (ant.fun.dna.gen_css, 
+                                            ant.fun.dna.gen.css_bray, type = "sites",
+                                 color = "cc",
+                                 shape = "culture",
+                                 title = expression(paste("PCoA antagonists - DNA")), label = NULL)+
+                                 geom_point(aes(fill = "cc"),  size = 3) + 
+  #guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  scale_shape_manual (values = shapeCode1) +
+  scale_color_manual(values = colorCode2) + 
+  scale_fill_manual(values = colorCode2)+
+  #scale_color_brewer(palette = "Paired")+
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE, alpha=0.5) +
+  #geom_text(aes(label = pre.crop), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=8),
+        axis.title.y = element_text(face="bold", colour="black", size=8),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+
+plot(plot_ant.fun.dna.gen.css)
+
+#RNA
+ant.fun.rna.gen1 <- prune_samples(sample_sums(ant.fun.rna.gen) > 0, ant.fun.rna.gen)
+ant.fun.rna.gen1
+
+ant.fun.rna.gen_css = phyloseq_transform_css(ant.fun.rna.gen1, norm = TRUE, log = FALSE)
+
+ant.fun.rna.gen.css_bray <- ordinate(ant.fun.rna.gen_css, "PCoA", "bray")
+plot_ant.fun.rna.gen.css<- plot_ordination (ant.fun.rna.gen_css, 
+                                            ant.fun.rna.gen.css_bray, type = "sites",
+                                 color = "cc",
+                                 shape = "culture",
+                                 title = expression(paste("PCoA antagonists - RNA")), label = NULL)+
+                                 geom_point(aes( fill = "cc"),  size = 3) +
+  #guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  scale_shape_manual (values = shapeCode1) +
+  scale_color_manual(values = colorCode2) + 
+  scale_fill_manual(values = colorCode2)+
+  #scale_color_brewer(palette = "Paired")+
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE, alpha=0.5) +
+  #geom_text(aes(label = pre.crop), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=8),
+        axis.title.y = element_text(face="bold", colour="black", size=8),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+
+plot(plot_ant.fun.rna.gen.css)
+```
+
+
+```{r}
+library(cowplot)
+PCoA_T1_ant <- cowplot::plot_grid(
+   plot_ant.fun.dna.gen.css.mono + theme(legend.position="none", title = element_blank()),
+   plot_ant.fun.rna.gen.css.mono+ theme(legend.position="none", title = element_blank()),
+   plot_ant.fun.dna.gen.css + theme(legend.position="none", title = element_blank()), 
+   plot_ant.fun.rna.gen.css+ theme(legend.position="none", title = element_blank()),
+  nrow = 2, ncol = 2, scale = 1,
+  hjust = 1) 
+PCoA_T1_ant
+
+legend <- get_legend(
+  # create some space to the left of the legend
+  plot_ant.fun.rna.gen.css + theme(legend.box.margin = margin(0,0,0,10)))
+
+PCoA_T0_ant.l <- plot_grid(PCoA_T1_ant, legend, rel_widths = c(2, 0.5))
+PCoA_T0_ant.l
+```
+
+
+PERMANOVA
+```{r}
+#DNA
+sampledf <- data.frame(sample_data(ant.fun.dna.gen_css))
+ant.fun.dna.gen.css_bray <- phyloseq::distance(subset_samples(ant.fun.dna.gen_css, time.point == "T1"), method = "bray")
+dispersion<-betadisper(ant.fun.dna.gen.css_bray , group=sampledf$cc)
+permutest(dispersion) #0.891
+plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
+
+adonis2(ant.fun.dna.gen.css_bray ~ block2+pre.crop*cc , data = sampledf, permutations = 999 )
+
+pairwise.perm.manova(distance(ant.fun.dna.gen_css, "bray"), 
+                     fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = TRUE)
+
+#RNA
+sampledf <- data.frame(sample_data(subset_samples(ant.fun.rna.gen_css, time.point == "T1")))
+ant.fun.rna.gen.css_bray <- phyloseq::distance(subset_samples(ant.fun.rna.gen_css, time.point == "T1"), method = "bray")
+dispersion<-betadisper(ant.fun.rna.gen.css_bray , group=sampledf$cc)
+permutest(dispersion) #0.089
+plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
+
+adonis2(ant.fun.rna.gen.css_bray ~ block2+pre.crop*cc , data = sampledf, permutations = 999 )
+
+pairwise.perm.manova(distance(ant.fun.rna.gen_css, "bray"), 
+                     fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = TRUE)
+```
+
+Alpha diversity
+
+```{r}
+load (file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
+ps.ITS.dna <- subset_samples(ps.ITS, nucleic.acid == "DNA"  & time.point == "T1")
+ps.ITS.rna <- subset_samples(ps.ITS, nucleic.acid == "RNA"  & time.point == "T1")
+
+ps.ITS.dna_rar = rarefy_even_depth(ps.ITS.dna, rngseed=1, sample.size=min(sample_sums(ps.ITS.rna)), replace=F) #2459 reads - 2179OTUs removed
+ps.ITS.rna_rar = rarefy_even_depth(ps.ITS.rna, rngseed=1, sample.size=min(sample_sums(ps.ITS.rna)), replace=F) #1090 reads - 2108OTUs removed
+
+summary(readcount(ps.ITS.dna_rar))
+summary(readcount(ps.ITS.rna_rar))
+```
+
+
+Antagonists
+```{r}
+#DNA
+#tax <- as.data.frame(tax_table(ps.ITS.dna_rar))
+
+ant.fun.dna.gen_rar <- subset_taxa(ps.ITS.dna_rar, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.dna.gen_rar@sam_data$pre.crop <- fct_relevel(ant.fun.dna.gen_rar@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.dna.gen_rar@sam_data$cc <- fct_relevel(ant.fun.dna.gen_rar@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+#RNA
+#tax <- as.data.frame(tax_table(ps.ITS.rna_rar))
+
+ant.fun.rna.gen_rar <- subset_taxa(ps.ITS.rna_rar, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.rna.gen_rar@sam_data$pre.crop <- fct_relevel(ant.fun.rna.gen_rar@sam_data$pre.crop, "er", "ir", "ry", "bo")
+ant.fun.rna.gen_rar@sam_data$cc <- fct_relevel(ant.fun.rna.gen_rar@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+```
+
+```{r}
+alpha.ant.gen.dna <- microbiome::alpha(ant.fun.dna.gen_rar, index = c("observed", "diversity_shannon", "chao1"))
+alpha.ant.gen.dna.meta <- meta(ant.fun.dna.gen_rar)
+alpha.ant.gen.dna.meta$Observed <- alpha.ant.gen.dna$observed
+alpha.ant.gen.dna.meta$Shannon <- alpha.ant.gen.dna$diversity_shannon
+alpha.ant.gen.dna.meta$Chao1 <- alpha.ant.gen.dna$chao1
+
+alpha.ant.gen.rna <- microbiome::alpha(ant.fun.rna.gen_rar, index = c("observed", "diversity_shannon", "chao1"))
+alpha.ant.gen.rna.meta <- meta(ant.fun.rna.gen_rar)
+alpha.ant.gen.rna.meta$Observed <- alpha.ant.gen.rna$observed
+alpha.ant.gen.rna.meta$Shannon <- alpha.ant.gen.rna$diversity_shannon
+alpha.ant.gen.rna.meta$Chao1 <- alpha.ant.gen.rna$chao1
+```
+
+
+```{r}
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+
+alpha.ant.gen.dna.meta$pre.crop <- fct_relevel(alpha.ant.gen.dna.meta$pre.crop, "bo", "ry", "ir", "er")
+
+ant_shannon.dna <-  alpha.ant.gen.dna.meta %>% 
+  ggplot (aes (x= cc, y=Shannon, fill = cc )) +
+  geom_boxplot( alpha = 1, color = "black", fatten = 1) +
+  #scale_color_manual(values = colorCode) + 
+  scale_fill_manual(values = colorCode2) +
+  scale_y_continuous(limits = c(0,3)) + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=15),
+        axis.title.y = element_text(colour="black", size=15),
+        axis.text.x  = element_text(colour = "black", angle=90, vjust=0.5, size=10, hjust = 1),
+        axis.text.y  = element_text(colour = "black", angle=360, vjust=0.5, size=10),
+        axis.title.x.bottom = element_blank(),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "none")+
+  facet_wrap(vars(pre.crop), nrow = 1, ncol = 4)
+
+plot(ant_shannon.dna)
+
+#RNA
+alpha.ant.gen.rna.meta$pre.crop <- fct_relevel(alpha.ant.gen.rna.meta$pre.crop, "bo", "ry", "ir", "er")
+
+ant_shannon.rna <-  alpha.ant.gen.rna.meta %>% 
+  ggplot (aes (x= cc, y=Shannon, fill = cc )) +
+  geom_boxplot( alpha = 1, color = "black", fatten = 1) +
+  #scale_color_manual(values = colorCode) + 
+  scale_fill_manual(values = colorCode2) +
+  scale_y_continuous(limits = c(0,3)) + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=15),
+        axis.title.y = element_text(colour="black", size=15),
+        axis.text.x  = element_text(colour = "black", angle=90, vjust=0.5, size=10, hjust = 1),
+        axis.text.y  = element_text(colour = "black", angle=360, vjust=0.5, size=10),
+        axis.title.x.bottom = element_blank(),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "none")+
+  facet_wrap(vars(pre.crop), nrow = 1, ncol = 4)
+
+plot(ant_shannon.rna)
+```
+```{r}
+library(cowplot)
+alpha.ant.shannon.p <- cowplot::plot_grid(
+   ant_shannon.dna + theme(legend.position="none"), 
+  ant_shannon.rna+ theme(legend.position="none"), 
+  nrow = 2, ncol = 1, scale = 1,
+  hjust = 1) 
+alpha.ant.shannon.p
+
+#ggsave(file="./Antagonists/figures/antagonists-boxplot-t0-shannon.svg", plot=alpha.ant.shannon.p, 
+#       width=80, height=150, units = "mm", device = "svg", scale = 0.8)
+```
+
+
+#########
+Observed
+
+```{r}
+alpha.ant.gen.dna.meta$pre.crop <- fct_relevel(alpha.ant.gen.dna.meta$pre.crop, "bo", "ry", "ir", "er")
+
+ant_Observed.dna <-  alpha.ant.gen.dna.meta %>% 
+  ggplot (aes (x= cc, y=Observed, fill = cc )) +
+  geom_boxplot( alpha = 1, color = "black", fatten = 1) +
+  #scale_color_manual(values = colorCode) + 
+  scale_fill_manual(values = colorCode2) +
+  scale_y_continuous(limits = c(0,25)) + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=15),
+        axis.title.y = element_text(colour="black", size=15),
+        axis.text.x  = element_text(colour = "black", angle=90, vjust=0.5, size=10, hjust = 1),
+        axis.text.y  = element_text(colour = "black", angle=360, vjust=0.5, size=10),
+        axis.title.x.bottom = element_blank(),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "none")+
+  facet_wrap(vars(pre.crop), nrow = 1, ncol = 4)
+
+plot(ant_Observed.dna)
+
+#RNA
+alpha.ant.gen.rna.meta$pre.crop <- fct_relevel(alpha.ant.gen.rna.meta$pre.crop, "bo", "ry", "ir", "er")
+
+ant_Observed.rna <-  alpha.ant.gen.rna.meta %>% 
+  ggplot (aes (x= cc, y=Observed, fill = cc )) +
+  geom_boxplot( alpha = 1, color = "black", fatten = 1) +
+  #scale_color_manual(values = colorCode) + 
+  scale_fill_manual(values = colorCode2) +
+  scale_y_continuous(limits = c(0,25)) + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=15),
+        axis.title.y = element_text(colour="black", size=15),
+        axis.text.x  = element_text(colour = "black", angle=90, vjust=0.5, size=10, hjust = 1),
+        axis.text.y  = element_text(colour = "black", angle=360, vjust=0.5, size=10),
+        axis.title.x.bottom = element_blank(),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")+
+  facet_wrap(vars(pre.crop), nrow = 1, ncol = 4)
+
+plot(ant_Observed.rna)
+```
+
+```{r}
+library(cowplot)
+alpha.ant.Observed.p <- cowplot::plot_grid(
+   ant_Observed.dna + theme(legend.position="none"), 
+  ant_Observed.rna+ theme(legend.position="none"), 
+  nrow = 2, ncol = 1, scale = 1,
+  hjust = 1) 
+alpha.ant.Observed.p
+
+#ggsave(file="./Antagonists/figures/antagonists-boxplot-t0-Observed.svg", plot=alpha.ant.Observed.p, 
+#       width=80, height=150, units = "mm", device = "svg", scale = 0.8)
+```
+
+###############
+Chao1
+
+
+```{r}
+alpha.ant.gen.dna.meta$pre.crop <- fct_relevel(alpha.ant.gen.dna.meta$pre.crop, "bo", "ry", "ir", "er")
+
+ant_Chao1.dna <-  alpha.ant.gen.dna.meta %>% 
+  ggplot (aes (x= cc, y=Chao1, fill = cc )) +
+  geom_boxplot( alpha = 1, color = "black", fatten = 1) +
+  #scale_color_manual(values = colorCode) + 
+  scale_fill_manual(values = colorCode2) +
+  scale_y_continuous(limits = c(0,30)) + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=15),
+        axis.title.y = element_text(colour="black", size=15),
+        axis.text.x  = element_text(colour = "black", angle=90, vjust=0.5, size=10, hjust = 1),
+        axis.text.y  = element_text(colour = "black", angle=360, vjust=0.5, size=10),
+        axis.title.x.bottom = element_blank(),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "none")+
+  facet_wrap(vars(pre.crop), nrow = 1, ncol = 4)
+
+plot(ant_Chao1.dna)
+
+#RNA
+alpha.ant.gen.rna.meta$pre.crop <- fct_relevel(alpha.ant.gen.rna.meta$pre.crop, "bo", "ry", "ir", "er")
+
+ant_Chao1.rna <-  alpha.ant.gen.rna.meta  %>% 
+  ggplot (aes (x= cc, y=Chao1, fill = cc )) +
+  geom_boxplot( alpha = 1, color = "black", fatten = 1) +
+  #scale_color_manual(values = colorCode) + 
+  scale_fill_manual(values = colorCode2) +
+  scale_y_continuous(limits = c(0,30)) + 
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=15),
+        axis.title.y = element_text(colour="black", size=15),
+        axis.text.x  = element_text(colour = "black", angle=90, vjust=0.5, size=10, hjust = 1),
+        axis.text.y  = element_text(colour = "black", angle=360, vjust=0.5, size=10),
+        axis.title.x.bottom = element_blank(),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")+
+  facet_wrap(vars(pre.crop), nrow = 1, ncol = 4)
+
+plot(ant_Chao1.rna)
+```
+
+```{r}
+library(cowplot)
+alpha.ant.Chao1.p <- cowplot::plot_grid(
+   ant_Chao1.dna + theme(legend.position="none"), 
+  ant_Chao1.rna+ theme(legend.position="none"), 
+  nrow = 2, ncol = 1, scale = 1,
+  hjust = 1) 
+alpha.ant.Chao1.p
+
+#ggsave(file="./Antagonists/figures/antagonists-boxplot-t0-Chao1.svg", plot=alpha.ant.Chao1.p, 
+#       width=80, height=150, units = "mm", device = "svg", scale = 0.8)
+```
+
+
+all together
+
+```{r}
+library(cowplot)
+
+legend <- get_legend(
+  # create some space to the left of the legend
+  ant_Observed.rna + theme(legend.box.margin = margin(0,0,0,10)))
+
+alpha.gen <- cowplot::plot_grid(
+   alpha.ant.shannon.p + theme(legend.position="none"), 
+  alpha.ant.Observed.p+ theme(legend.position="none"),
+  nrow = 2, ncol = 1, scale = 1,
+  hjust = 1) 
+alpha.gen
+
+alpha.gen.l <- plot_grid(alpha.gen, legend, rel_widths = c(3,0.5))
+alpha.gen.l
+#ggsave(file="./Antagonists/figures/antagonists-boxplot-t0-Chao1.svg", plot=alpha.ant.Chao1.p, 
+#       width=80, height=150, units = "mm", device = "svg", scale = 0.8)
+```
+
+Stats - ggplot
+```{r}
+Shannon
+k1<- kruskal.test(Shannon ~ cc, data=alpha.ant.gen.dna.meta)
+k1
+
+library(FSA)
+dunnTest(Shannon ~ cc,
+  data = alpha.ant.gen.dna.meta,
+  method = "bh"
+)
+
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+
+library(ggstatsplot)
+sh.dna.fun <- ggstatsplot:: ggbetweenstats(
+  data = alpha.ant.gen.dna.meta,
+  x = cc,
+  y = Shannon,
+  type = "nonparametric", # ANOVA or Kruskal-Wallis
+  plot.type = "box",
+  pairwise.comparisons = TRUE,
+  pairwise.display = "significant",
+  p.adjust.method = "holm",
+  centrality.plotting = FALSE,
+  bf.message = FALSE) +
+  ggplot2::scale_color_manual(values = colorCode2) +
+  ggplot2::theme (axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+sh.dna.fun
+
+k2 <- kruskal.test(Shannon ~ pre.crop, data=alpha.ant.gen.dna.meta)
+k2
+k3 <- kruskal.test(Shannon ~ block2, data=alpha.ant.gen.dna.meta)
+k3
+k4 <- kruskal.test(Shannon ~ log1p(McT1), data=alpha.ant.gen.dna.meta)
+k4
+
+shapiro.test(alpha.ant.gen.dna.meta$Observed)
+lm2 <- lm(Observed ~ pre.crop+cc, data = alpha.ant.gen.dna.meta)
+summary(lm2) #p-value: 0.1896
+res <- lm2$residuals
+shapiro.test(res)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(res)
+ggdensity(res)
+
+k1<- kruskal.test(Observed ~ cc, data=alpha.ant.gen.dna.meta)
+k1
+
+FSA::dunnTest(Shannon ~ cc,
+  data = alpha.ant.gen.rna.meta,
+  method = "holm")
+
+obs.dna.fun <- ggstatsplot:: ggbetweenstats(
+  data = alpha.ant.gen.dna.meta,
+  x = cc,
+  y = Observed,
+  type = "nonparametric", # ANOVA or Kruskal-Wallis
+  plot.type = "box",
+  pairwise.comparisons = TRUE,
+  pairwise.display = "significant",
+  p.adjust.method = "holm",
+  centrality.plotting = FALSE,
+  bf.message = FALSE) +
+  ggplot2::scale_color_manual(values = colorCode2) +
+  ggplot2::theme (axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+obs.dna.fun
+
+k2 <- kruskal.test(Observed ~ pre.crop, data=alpha.ant.gen.dna.meta)
+k2
+k3 <- kruskal.test(Observed ~ block2, data=alpha.ant.gen.dna.meta)
+k3
+k4 <- kruskal.test(Observed ~ log1p(McT1), data=alpha.ant.gen.dna.meta)
+k4
+
+dna.fun.t1 <- combine_plots( plotlist = list (sh.dna.bact, obs.dna.bact), 
+               plotgrid.args=list(nrow = 1))
+dna.fun.t1
+```
+
+
+
+```{r}
+#RNA
+shapiro.test(alpha.ant.gen.rna.meta$Shannon)
+lm4 <- lm(Shannon ~ cc, data = alpha.ant.gen.rna.meta)
+summary(lm4) #p-value: 0.6702
+res <- lm4$residuals
+shapiro.test(res)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(res)
+ggdensity(res)
+
+k1<- kruskal.test(Shannon ~ cc, data=alpha.ant.gen.rna.meta)
+k1
+k2 <- kruskal.test(Shannon ~ pre.crop, data=alpha.ant.gen.rna.meta)
+k2
+k3 <- kruskal.test(Shannon ~ block2, data=alpha.ant.gen.rna.meta)
+k3
+k4 <- kruskal.test(Shannon ~ log1p(McT1), data=alpha.ant.gen.rna.meta)
+k4
+
+sh.rna.fun <- ggstatsplot:: ggbetweenstats(
+  data = alpha.ant.gen.rna.meta,
+  x = cc,
+  y = Shannon,
+  type = "nonparametric", # ANOVA or Kruskal-Wallis
+  plot.type = "box",
+  pairwise.comparisons = TRUE,
+  pairwise.display = "significant",
+  p.adjust.method = "holm",
+  centrality.plotting = FALSE,
+  bf.message = FALSE) +
+  ggplot2::scale_color_manual(values = colorCode2) +
+  ggplot2::theme (axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+sh.rna.fun
+
+shapiro.test(alpha.ant.gen.rna.meta$Observed)
+lm5 <- lm(Observed ~ pre.crop, data = alpha.ant.gen.rna.meta)
+summary(lm5) #p-value: 0.4868
+res <- lm5$residuals
+shapiro.test(res)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(res)
+ggdensity(res)
+
+k1<- kruskal.test(Observed ~ cc, data=alpha.ant.gen.rna.meta)
+k1
+k2 <- kruskal.test(Observed ~ pre.crop, data=alpha.ant.gen.rna.meta)
+k2
+k3 <- kruskal.test(Observed ~ block2, data=alpha.ant.gen.rna.meta)
+k3
+k4 <- kruskal.test(Observed ~ log1p(McT1), data=alpha.ant.gen.rna.meta)
+k4
+
+obs.rna.fun <- ggstatsplot:: ggbetweenstats(
+  data = alpha.ant.gen.rna.meta,
+  x = cc,
+  y = Observed,
+  type = "nonparametric", # ANOVA or Kruskal-Wallis
+  plot.type = "box",
+  pairwise.comparisons = TRUE,
+  pairwise.display = "significant",
+  p.adjust.method = "holm",
+  centrality.plotting = FALSE,
+  bf.message = FALSE) +
+  ggplot2::scale_color_manual(values = colorCode2) +
+  ggplot2::theme (axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1, size = 8))
+obs.rna.fun
+
+rna.bact.t1 <- combine_plots( plotlist = list (sh.rna.bact, obs.rna.bact), 
+               plotgrid.args=list(nrow = 1))
+```
+
+Stats
+```{r}
+alpha.ant.gen.dna.meta$pre.crop <- fct_relevel(alpha.ant.gen.dna.meta$pre.crop, "er", "ir", "ry", "bo")
+
+#DNA
+shapiro.test(alpha.ant.gen.dna.meta$Shannon)
+lm1 <- lm(Shannon ~ pre.crop+cc+block2, data = alpha.ant.gen.dna.meta)
+summary(lm1) #p-value: 3.352e-07
+anova(lm1)
+res <- lm1$residuals
+shapiro.test(res)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(res)
+ggdensity(res)
+
+lm1b <- lm(Shannon ~ log1p(McT1)+cc, data = alpha.ant.gen.dna.meta)
+summary(lm1b) #p-value: 3.352e-07
+anova(lm1b)
+resb <- lm1b$residuals
+shapiro.test(resb)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(resb)
+ggdensity(resb)
+
+shapiro.test(alpha.ant.gen.dna.meta$Observed)
+lm2 <- lm(Observed ~ pre.crop+cc+block2, data = alpha.ant.gen.dna.meta)
+summary(lm2) #p-value: 0.1896
+anova (lm2)
+res <- lm2$residuals
+shapiro.test(res)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(res)
+ggdensity(res)
+
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+
+k1<- kruskal.test(Observed ~ cc, data=alpha.ant.gen.dna.meta)
+k1
+k2 <- kruskal.test(Observed ~ pre.crop, data=alpha.ant.gen.dna.meta)
+k2
+k3 <- kruskal.test(Observed ~ block2, data=alpha.ant.gen.dna.meta)
+k3
+k4 <- kruskal.test(Observed ~ log1p(McT1), data=alpha.ant.gen.dna.meta)
+k4
+
+pw1 <- wilcox_test(Observed ~ cc, data=alpha.ant.gen.dna.meta, p.adjust.method = "bonferroni")
+pw1
+```
+
+```{r}
+#RNA
+shapiro.test(alpha.ant.gen.rna.meta$Shannon)
+lm4 <- lm(Shannon ~ pre.crop, data = alpha.ant.gen.rna.meta)
+summary(lm4) #p-value: 0.6702
+res <- lm4$residuals
+shapiro.test(res)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(res)
+ggdensity(res)
+
+k1<- kruskal.test(Shannon ~ cc, data=alpha.ant.gen.rna.meta)
+k1
+k2 <- kruskal.test(Shannon ~ pre.crop, data=alpha.ant.gen.rna.meta)
+k2
+k3 <- kruskal.test(Shannon ~ block2, data=alpha.ant.gen.rna.meta)
+k3
+k4 <- kruskal.test(Shannon ~ log1p(McT1), data=alpha.ant.gen.rna.meta)
+k4
+
+shapiro.test(alpha.ant.gen.rna.meta$Observed)
+lm5 <- lm(Observed ~ pre.crop, data = alpha.ant.gen.rna.meta)
+summary(lm5) #p-value: 0.4868
+res <- lm5$residuals
+shapiro.test(res)#p-value > 0.05 data are not significantly different from normal distribution.
+ggqqplot(res)
+ggdensity(res)
+
+k1<- kruskal.test(Observed ~ cc, data=alpha.ant.gen.rna.meta)
+k1
+k2 <- kruskal.test(Observed ~ pre.crop, data=alpha.ant.gen.rna.meta)
+k2
+k3 <- kruskal.test(Observed ~ block2, data=alpha.ant.gen.rna.meta)
+k3
+k4 <- kruskal.test(Observed ~ log1p(McT1), data=alpha.ant.gen.rna.meta)
+k4
+```
+
+
+ relative abundance
+```{r}
+load (file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
+ps.ITS.dna <- subset_samples(ps.ITS, nucleic.acid == "DNA"  & time.point == "T1")
+ps.ITS.rna <- subset_samples(ps.ITS, nucleic.acid == "RNA"  & time.point == "T1")
+
+ps.ITS.dna_rar = rarefy_even_depth(ps.ITS.dna, rngseed=1, sample.size=min(sample_sums(ps.ITS.rna)), replace=F) #112718 reads - 2575OTUs removed
+ps.ITS.rna_rar = rarefy_even_depth(ps.ITS.rna, rngseed=1, sample.size=min(sample_sums(ps.ITS.rna)), replace=F) #41125 reads - 2884OTUs removed
+
+ps.ITS.dna_comp <- transform(ps.ITS.dna_rar, "compositional")
+ps.ITS.rna_comp <- transform(ps.ITS.rna_rar, "compositional")
+```
+
+Antagonists
+```{r}
+#DNA
+#tax <- as.data.frame(tax_table(ps.ITS.nofilt.dna_rar))
+
+ant.fun.dna.gen_comp <- subset_taxa(ps.ITS.dna_comp, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.dna.gen_comp@sam_data$pre.crop <- fct_relevel(ant.fun.dna.gen_comp@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.dna.gen_comp@sam_data$cc <- fct_relevel(ant.fun.dna.gen_comp@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+#RNA
+#tax <- as.data.frame(tax_table(ps.ITS.rna_comp))
+
+ant.fun.rna.gen_comp <- subset_taxa(ps.ITS.rna_comp, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+ant.fun.rna.gen_comp@sam_data$pre.crop <- fct_relevel(ant.fun.rna.gen_comp@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.rna.gen_comp@sam_data$cc <- fct_relevel(ant.fun.rna.gen_comp@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+```
+
+
+Genus datasets
+```{r}
+#DNA
+ant.gen.dna <- microbiome::aggregate_taxa(ant.fun.dna.gen_comp, "Genus")
+samdf.gen.dna <-as.data.frame(sample_data (ant.gen.dna))
+otu.gen.dna <- as.data.frame (t(otu_table(ant.gen.dna)))
+tax.gen.dna <- as.data.frame(tax_table(ant.gen.dna))
+
+data.gen.dna <- merge (samdf.gen.dna, otu.gen.dna,  by = 'row.names')
+colnames(data.gen.dna)
+data.gen.dna <-  data.gen.dna %>% pivot_longer (cols = Penicillium:Mortierella,
+                                                  names_to = "Genus", 
+                                                  values_to = "Abundance") %>% 
+  filter(Abundance > 0)
+
+data.gen.dna$pre.crop <- fct_relevel(data.gen.dna$pre.crop, "bo", "ry", "ir", "er")
+data.gen.dna$cc <- fct_relevel(data.gen.dna$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+#rna
+ant.gen.rna <- microbiome::aggregate_taxa(ant.fun.rna.gen_comp, "Genus")
+samdf.gen.rna <-as.data.frame(sample_data (ant.gen.rna))
+otu.gen.rna <- as.data.frame (t(otu_table(ant.gen.rna)))
+tax.gen.rna <- as.data.frame(tax_table(ant.gen.rna))
+
+data.gen.rna <- merge (samdf.gen.rna, otu.gen.rna,  by = 'row.names')
+colnames(data.gen.rna)
+data.gen.rna <-  data.gen.rna %>% pivot_longer (cols = Penicillium:Mortierella,
+                                                  names_to = "Genus", 
+                                                  values_to = "Abundance") %>% 
+  filter(Abundance > 0)
+
+data.gen.rna$pre.crop <- fct_relevel(data.gen.rna$pre.crop, "bo", "ry", "ir", "er")
+data.gen.rna$cc <- fct_relevel(data.gen.rna$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+data.gen.dna <- data.gen.dna %>% mutate (Abundance = as.numeric(Abundance)) %>% 
+  mutate (Genus = reorder(Genus, - Abundance))
+
+data.gen.rna <- data.gen.rna %>% mutate (Abundance = as.numeric(Abundance)) %>% 
+  mutate (Genus = reorder(Genus, - Abundance))
+```
+
+#calculate means 
+```{r}
+data.gen.fun.t1 <- merge.data.frame(data.gen.dna, data.gen.rna, all = TRUE)
+data.gen.fun.t1
+write.csv(data.gen.fun.t1, "./Antagonists/rel.abd.antagonists.t1-DNARNA.csv", row.names=FALSE)
+
+mean.ccgen.fun.t1 <- data.gen.fun.t1 %>%
+  mutate(Abundance100 = Abundance * 100) %>% 
+group_by(Genus, cc, nucleic.acid) %>%
+summarise_at(vars(Abundance100),             
+               list(rel.abd = mean)) 
+print (mean.ccgen.fun.t1, n = "all", digits = 1)
+
+mean.cc.fun.t1 <- data.gen.fun.t1 %>%
+  mutate(Abundance100 = Abundance * 100) %>% 
+group_by(nucleic.acid, cc) %>%                        
+summarise_at(vars(Abundance100),              
+               list(rel.abd = mean)) 
+print (mean.cc.fun.t1, n = "all", digits = 1)
+
+tot.cc.fun.t1 <- data.gen.fun.t1 %>%
+  mutate(Abundance100 = Abundance * 100) %>% 
+  group_by(nucleic.acid, cc) %>%                        
+  summarise_at(vars(Abundance100),              
+               list(rel.abd.sum = sum)) 
+print (tot.cc.fun.t1, n = "all", digits = 1)
+
+
+mean.gen.fun.t1 <- data.gen.fun.t1%>%
+  mutate(Abundance100 = Abundance * 100) %>% 
+group_by(nucleic.acid, Genus) %>%                        
+summarise_at(vars(Abundance100),              
+               list(rel.abd = mean)) 
+print(mean.gen.fun.t1, n = "all", digits = 1)
+```
+
+#set common colours
+```{r}
+unique.phyla.t1 <- union(unique(data.gen.dna$Genus), unique(data.gen.rna$Genus))
+length(unique.phyla.t1)#16
+nb.cols.t1 <- length(unique.phyla.t1)
+mycolors.t1 <- colorRampPalette(brewer.pal(12, "Paired"))(nb.cols.t1)
+set.seed(50)
+names(mycolors.t1) <- sample(unique.phyla.t1)
+```
+
+
+
+#make graphs
+
+T1 
+```{r}
+plot.comp.dna.f <- plot_composition(ant.gen.dna,
+                             sample.sort = "cc",
+                             x.label = "cc",
+                             average_by = "cc") + 
+  theme(legend.position = "right") + 
+  scale_fill_manual("Genus",  values = mycolors.t1, breaks = sort(unique.phyla.t1)) + 
+  scale_y_continuous(limits = c(0, 0.08), labels = scales::percent)+
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, size = 8,hjust = 1),
+        axis.title.x = element_blank())+ 
+  #ggtitle("Relative abundance of bacterial antagonists at RNA") + theme(legend.title = element_text(size = 18))+
+  labs(y = "Relative abundance")
+plot.comp.dna.f
+
+plot.comp.rna.f <- plot_composition(ant.gen.rna,
+                             sample.sort = "cc",
+                             x.label = "cc",
+                             average_by = "cc") + 
+  theme(legend.position = "right") + 
+  scale_fill_manual("Genus",  values = mycolors.t1, breaks = sort(unique.phyla.t1)) + 
+  scale_y_continuous(limits = c(0, 0.08), labels = scales::percent)+
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, size = 8, hjust = 1),
+        axis.title.x = element_blank())+ 
+  #ggtitle("Relative abundance of bacterial antagonists at RNA") + theme(legend.title = element_text(size = 18))+
+  labs(y = "Relative abundance")
+plot.comp.rna.f
+```
+Antagonists at t0
+```{r}
+library(cowplot)
+legend <- get_legend(
+  # create some space to the left of the legend
+  p.gen.dna + theme(legend.box.margin = margin(0,0,0,10)))
+
+alpha.ant.gen <- cowplot::plot_grid(
+   p.gen.dna + theme(legend.position="none"), 
+  p.gen.rna+ theme(legend.position="none"), 
+  nrow = 2, ncol = 1, scale = 0.9,
+  labels = c("A", "B")) 
+alpha.ant.gen
+
+alpha.ant.gen.leg <-plot_grid (alpha.ant.gen, legend, rel_widths = c(2,0.5))
+alpha.ant.gen.leg
+
+#ggsave(file="./Antagonists/figures/t0-relabd.antagonists.svg", plot=alpha.ant.gen.shannon.leg, 
+#       width=10, height=150, units = "mm", device = "svg", scale=1.5)
+```
+
+
+Statistical tests
+Correlation antagonists with pre crops
+
+```{r}
+load (file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
+ps.ITS.dna <- subset_samples(ps.ITS, nucleic.acid == "DNA"  & time.point == "T1")
+ps.ITS.rna <- subset_samples(ps.ITS, nucleic.acid == "RNA"  & time.point == "T1")
+
+ps.ITS.dna_rar = rarefy_even_depth(ps.ITS.dna, rngseed=1, sample.size=min(sample_sums(ps.ITS.rna)), replace=F) #112718 reads - 2575OTUs removed
+ps.ITS.rna_rar = rarefy_even_depth(ps.ITS.rna, rngseed=1, sample.size=min(sample_sums(ps.ITS.rna)), replace=F) #41125 reads - 2884OTUs removed
+```
+
+
+```{r}
+ant.fun.dna.gen.rar <- subset_taxa(ps.ITS.dna_rar, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+
+ant.fun.dna.sp.rar <- subset_taxa(ps.ITS.dna_rar, Species %in% c("Arthrobotrys_iridis",	"Arthrobotrys_oligospora",
+                                                                   "Arthrobotrys_reticulata",	"Arthrobotrys_brochopaga",
+                                                                    "Arthrobotrys_dactyloides",
+                                                                     "Drechmeria_coniospora",
+                                                                     "Haptocillium_balanoides", 
+                                                                   "Acremonium_biseptum", "Acremonium_furcatum", 
+                                                                   "Acremonium_rutilum",	"Acremonium_sp",
+                                                                 "Acremonium_verruculosum",
+                                                                   "Nematoctonus_leiosporus",
+                                                                   "Mortierella_elongatula","Mortierella_fatshederae",
+                                                                   "Mortierella_globalpina", "Mortierella_sp"))
+ant.fun.dna.gen.rar@sam_data$pre.crop <- fct_relevel(ant.fun.dna.gen.rar@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.dna.gen.rar@sam_data$cc <- fct_relevel(ant.fun.dna.gen.rar@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+
+ant.fun.rna.gen.rar <- subset_taxa(ps.ITS.rna_rar, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                                      "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
+                                                                      "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
+                                                                      "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
+                                                                      "Mortierella", "Monacrosporium"))
+#ant.fun.rna.sp.rar <- subset_taxa(ps.ITS.rna_rar, Species %in% c("Arthrobotrys_iridis",	"Arthrobotrys_oligospora",
+#                                                                   "Arthrobotrys_reticulata",	"Arthrobotrys_brochopaga",
+#                                                                    "Arthrobotrys_dactyloides",
+#                                                                     "Drechmeria_coniospora",
+#                                                                     "Haptocillium_balanoides", 
+#                                                                   "Acremonium_biseptum", "Acremonium_furcatum", 
+#                                                                   "Acremonium_rutilum",	"Acremonium_sp",
+#                                                                 "Acremonium_verruculosum",
+#                                                                  "Nematoctonus_leiosporus",
+#                                                                   "Mortierella_elongatula","Mortierella_fatshederae",
+#                                                                   "Mortierella_globalpina", "Mortierella_sp"))
+ant.fun.rna.gen.rar@sam_data$pre.crop <- ant.fun.rna.gen.rar(ant.fun.rna.sp.comp@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.fun.rna.gen.rar@sam_data$cc <- fct_relevel(ant.fun.rna.gen.rar@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
+```
+
+```{r}
+ant.gen.dna.s <- microbiome::aggregate_taxa(ant.fun.dna.gen.rar, "Genus")
+samdf.gen.dna.s <-as.data.frame(sample_data (ant.gen.dna.s))
+otu.gen.dna.s <- as.data.frame (t(otu_table(ant.gen.dna.s)))
+tax.gen.dna.s <- as.data.frame(tax_table(ant.gen.dna.s))
+
+data.gen.dna.s <- merge (samdf.gen.dna.s, otu.gen.dna.s,  by = 'row.names')
+colnames(data.gen.dna.s)
+
+data.gen.dna.s <- data.gen.dna.s %>% dplyr::filter (sample.type == "rhizo") 
+colnames(data.gen.dna.s)
+data.gen.dna.s$pre.crop <- as.factor(data.gen.dna.s$pre.crop)
+
+data.gen.dna.s$pre.crop <- fct_relevel(data.gen.dna.s$pre.crop, "er", "ir", "ry", "bo")
+```
+
+```{r}
+ant.gen.rna.s <- microbiome::aggregate_taxa(ant.fun.rna.gen.rar, "Genus")
+samdf.gen.rna.s <-as.data.frame(sample_data (ant.gen.rna.s))
+otu.gen.rna.s <- as.data.frame (t(otu_table(ant.gen.rna.s)))
+tax.gen.rna.s <- as.data.frame(tax_table(ant.gen.rna.s))
+
+data.gen.rna.s <- merge (samdf.gen.rna.s, otu.gen.rna.s,  by = 'row.names')
+colnames(data.gen.rna.s)
+
+data.gen.rna.s <- data.gen.rna.s %>% dplyr::filter (sample.type == "rhizo") 
+colnames(data.gen.rna.s)
+data.gen.rna.s$pre.crop <- as.factor(data.gen.rna.s$pre.crop)
+
+data.gen.rna.s$pre.crop <- fct_relevel(data.gen.rna.s$pre.crop, "er", "ir", "ry", "bo")
+```
+
+
+Genera to test:
+
+"Penicillium"    "Arthrobotrys"  
+[25] "Dactylella"     "Monacrosporium" "Orbilia"       
+[28] "Trichoderma"    "Fusarium"       "Hirsutella"    
+[31] "Coprinus"       "Nematoctonus"   "Coprinellus"   
+[34] "Stropharia"     "Paraglomus"     "Mortierella"
+
+Check Orbilia
+```{r}
+data.gen.dna.s$Orbilia
+```
+No data
+
+Check Arthrobotrys vs pre crops
+```{r}
+data.gen.dna.s$Arthrobotrys
+shapiro.test(data.gen.dna.s$Arthrobotrys)
+shapiro.test(log1p(data.gen.dna.s$Arthrobotrys))
+plot(log1p(data.gen.dna.s$Arthrobotrys))
+ggqqplot(log1p(data.gen.dna.s$Arthrobotrys))
+ggqqplot(data.gen.dna.s$Arthrobotrys)
+```
+Shapiro is significant, so non-normal ditribution, but qq plot is fine. Shapiro ight not have the right resolution.
+
+```{r}
+library(DHARMa)
+lm <- lm (log1p(Arthrobotrys)~ cc+pre.crop,data=data.gen.dna.s)
+summary(aov(lm))
+summary(lm)#p 0.7139 #se 0.961 #r2adj -0.1704
+testDispersion(lm)#ok
+simulationOutput <- simulateResiduals(fittedModel = lm, plot = T) #no fit
+tres <- residuals(lm) 
+shapiro.test(res)#p-value: 0.1461
+ggqqplot(res)
+ggdensity(res)
+
+lm2 <- lm (log1p(Arthrobotrys)~ cc+block2,data=data.gen.dna.s)
+summary(lm2)#0.487 #r2 -0.03111 #se 0.902
+testDispersion(lm2) #ok
+simulationOutput <- simulateResiduals(fittedModel = lm2, plot = T) #fits
+res <- residuals(lm2) 
+shapiro.test(res)#p-value: 0.54
+
+lm3 <- lm (log1p(Arthrobotrys)~ pre.crop+block2,data=data.gen.dna.s)
+summary(lm3)#se 1.016 #r2 -0.3079 #p 0.7448
+testDispersion(lm3) #fits
+simulationOutput <- simulateResiduals(fittedModel = lm3, plot = T) #fits
+res <- residuals(lm3) 
+shapiro.test(res)#p-value: 0.9961
+ggqqplot(res)
+ggdensity(res)
+
+lm.pol <- lm (log1p(Arthrobotrys) ~ poly (pre.crop,2) + block2 ,data=data.gen.dna.s)
+summary(lm.pol)#p 0.6396 #r 0.1536 # 0.9541
+testDispersion(lm.pol) #fits
+simulationOutput <- simulateResiduals(fittedModel = lm.pol, plot = T) #fits
+res <- residuals(lm.pol) 
+shapiro.test(res) #p-value = 0.9487
+
+lmer <- lmer(log(Arthrobotrys) ~ pre.crop + (1 | block2), data.gen.dna.s)
+summary(lmer)
+testDispersion(lmer) #fits
+simulationOutput <- simulateResiduals(fittedModel = lmer, plot = T) #no fit
+res <- residuals(lmer) 
+shapiro.test(res) #p-value = 0.1461
+
+lmer.b <- lmer(log1p(Arthrobotrys) ~ block2 + (1 | pre.crop), data.gen.dna.s)
+summary(lmer.b)
+testDispersion(lmer) #fits
+simulationOutput <- simulateResiduals(fittedModel = lmer, plot = T) #no fit
+res <- residuals(lmer) 
+shapiro.test(res) #p-value = 0.1461
+
+lmer.nul <- lmer(log(Arthrobotrys) ~ 1 + (1 | block2), data.gen.dna.s)
+summary(lmer.nul)
+testDispersion(lmer.nul) #fits
+simulationOutput <- simulateResiduals(fittedModel = lmer.nul, plot = T) #fits
+res <- residuals(lmer.nul) 
+ggqqplot(res)
+ggdensity(res)
+anova(lmer,lmer.nul)
+
+glm.nb <- glm.nb (Arthrobotrys ~ pre.crop*McT0, data= data.gen.dna.s)
+summary(glm.nb) #AIC: 158.63 #Std. Err.:  1.10
+Anova(glm.nb, type = "II")
+testDispersion(glm.nb)
+simulationOutput <- simulateResiduals(fittedModel = glm.nb, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+
+glm.nb2 <- glmer.nb(Arthrobotrys~ log1p(McT0) + pre.crop+(1|block2),data=data.gen.dna.s)
+summary(glm.nb2) #AIC: 161.1 #Std. Err.: NA
+Anova(glm.nb2)
+testDispersion(glm.nb2)
+simulationOutput <- simulateResiduals(fittedModel = glm.nb2, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+res <- residuals(glm.nb2) 
+hist(res)
+
+y ~ tot abd (rowsum) + pre.crop
+
+lmer <- glmer.nb(Arthrobotrys~ pre.crop+(1|block2))
+summary(lmer)
+testDispersion(lmer)
+simulationOutput <- simulateResiduals(fittedModel = lmer, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+emmeans(lmer, pairwise ~ pre.crop)
+
+lmer.p <- glmer(Arthrobotrys~ pre.crop+(1|block2),data=data.gen.dna.s, family = "poisson")
+summary(lmer.p)
+testDispersion(lmer.p)
+simulationOutput <- simulateResiduals(fittedModel = lmer.p, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+res <- residuals(lmer.p) 
+ggqqplot(res)
+ggdensity(res)
+
+lmer.p.nul <- glmer(Arthrobotrys~ 1+(1|block2),data=data.gen.dna.s, family = "poisson")
+summary(lmer.p.nul)
+testDispersion(lmer.p.nul)
+simulationOutput <- simulateResiduals(fittedModel = lmer.p.nul, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+res <- residuals(lmer.p.nul) 
+ggqqplot(res)
+ggdensity(res)
+anova(lmer.p.nul, lmer.p)
+
+lmer.qp <- glm(Arthrobotrys~ pre.crop,data=data.gen.dna.s, family = "quasipoisson")
+summary(lmer.qp)
+testDispersion(lmer.qp)
+simulationOutput <- simulateResiduals(fittedModel = lmer.p, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+res <- residuals(lmer.qp) 
+ggqqplot(res)
+ggdensity(res)
+
+lmer.p.nul <- glmer(Arthrobotrys~ 1+(1|block2),data=data.gen.dna.s, family = "poisson")
+anova (lmer.p, lmer.p.nul)
+
+```
+
+
+Check Arthrobotrys vs McT0
+
+```{r}
+lm.mc <- lm(log1p(Arthrobotrys)~ log1p(McT0), data=data.gen.dna.s)
+summary(lm.mc)
+anova(lm.mc)
+testDispersion(lm.mc)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+
+#BEST to USE
+lm.mc.p <- lm(log1p(Arthrobotrys)~ log1p(McT0)+ cc+pre.crop+block2,data=data.gen.dna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+res <- residuals(lm.mc.p) 
+ggqqplot(res)
+ggdensity(res)
+
+#no fit
+lm.mc.pol <- lm(log(Arthrobotrys)~ log(McT0) + poly(McT0, 2)+pre.crop,data=data.gen.dna.s)
+summary(lm.mc.pol)
+testDispersion(lm.mc.pol)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.pol, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+
+glm.mc <- glm.nb(Arthrobotrys~ McT0+pre.crop ,data=data.gen.dna.s)
+summary(glm.mc)
+testDispersion(glm.mc)
+simulationOutput <- simulateResiduals(fittedModel = glm.mc, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+
+glm.mc1 <- glm.nb(Arthrobotrys~ McT0*pre.crop ,data=data.gen.dna.s)
+summary(glm.mc1)
+anova(glm.mc1, glm.mc)
+testDispersion(glm.mc1)
+simulationOutput <- simulateResiduals(fittedModel = glm.mc1, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+
+glm.mc2 <- glm.nb(Arthrobotrys~ McT0+ I(McT0^2)+pre.crop,data=data.gen.dna.s)
+summary(glm.mc2)
+testDispersion(glm.mc2)
+simulationOutput <- simulateResiduals(fittedModel = glm.mc2, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+
+glm.mc3 <- glm.nb(Arthrobotrys~block2+ McT0+pre.crop,data=data.gen.dna.s)
+summary(glm.mc3)
+testDispersion(glm.mc3)
+simulationOutput <- simulateResiduals(fittedModel = glm.mc3, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+
+glm.mc4 <- glm.nb(Arthrobotrys~ McT0+ I(McT0^2)+ McT0*pre.crop,data=data.gen.dna.s)
+summary(glm.mc4)
+testDispersion(glm.mc4)
+simulationOutput <- simulateResiduals(fittedModel = glm.mc4, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+
+glm.mc5 <- glm.nb(Arthrobotrys~ McT0+ McT0*pre.crop,data=data.gen.dna.s)
+summary(glm.mc5)
+testDispersion(glm.mc5)
+simulationOutput <- simulateResiduals(fittedModel = glm.mc5, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+
+anova( glm.mc, glm.mc2,glm.mc1, glm.mc3, glm.mc4, glm.mc5)
+
+#doesn't fit randon effect
+glmer.mc <- glmer.nb(Arthrobotrys~McT0 + I(McT0^2)+(1|block2),data=data.gen.dna.s)
+summary(glmer.mc)
+testDispersion(glmer.mc)
+simulationOutput <- simulateResiduals(fittedModel = glmer.mc, plot = T)
+
+lmer.mc <- lmer(log1p(Arthrobotrys) ~ log1p(McT0) + cc+pre.crop+(1 | block2), data.gen.dna.s)
+summary(lmer.mc)
+testDispersion(lmer.mc) #fits
+simulationOutput <- simulateResiduals(fittedModel = lmer.mc, plot = T) #no fit
+res <- residuals(lmer.mc) 
+shapiro.test(res)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT0)
+
+#no fit
+glm.p.mc <- glm(Arthrobotrys~McT0+ pre.crop,data=data.gen.dna.s, family = "quasipoisson")
+summary(glm.p.mc)
+testDispersion(glm.p.mc)
+simulationOutput <- simulateResiduals(fittedModel = glm.p.mc, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+res <- residuals(glm.p.mc) 
+ggqqplot(glm.p.mc)
+ggdensity(glm.p.mc)
+```
+
+
+"Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina","Drechmeria","Haptocillium", "Hirsutella","Lecanicillium","Trichoderma", "Fusarium", "Penicillium", "Nematoctonus","Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus","Mortierella", "Monacrosporium"
+
+#### use lm on log transformed
+```{r}
+lm.mc.p <- lm(log1p(Arthrobotrys)~ log1p(McT1)+ cc+pre.crop+block2,data=data.gen.dna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+plotResiduals(simulationOutput, form = data.gen.dna.s$McT1)
+plotResiduals(simulationOutput, form = data.gen.dna.s$pre.crop)
+res <- residuals(lm.mc.p) 
+ggqqplot(res)
+shapiro.test(res)
+ggdensity(res)
+```
+no significant effect of any factor
+
+```{r}
+data.gen.dna.s$Dactylella
+#not enough data
+```
+
+```{r}
+data.gen.dna.s$Dactylellina
+#not enough data
+```
+
+```{r}
+data.gen.dna.s$Drechmeria
+#not enough data
+```
+
+```{r}
+data.gen.dna.s$Haptocillium
+sum((data.gen.dna.s$Haptocillium)>0)#11 non 0
+```
+
+```{r}
+data.gen.dna.s$Hirsutella
+sum((data.gen.dna.s$Hirsutella)>0) #10
+
+```
+
+```{r}
+data.gen.dna.s$Lecanicillium
+#nd
+```
+
+```{r}
+data.gen.dna.s$Trichoderma
+sum((data.gen.dna.s$Trichoderma)>0) #86/118
+lm.mc.p <- lm(log1p(Trichoderma)~ log1p(McT1)+cc+ pre.crop + block2,data=data.gen.dna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+res <- residuals(lm.mc.p) 
+ggqqplot(res)
+shapiro.test(res)
+ggdensity(res)
+```
+
+```{r}
+data.gen.dna.s$Fusarium
+sum((data.gen.dna.s$Fusarium)>0) #115/118
+lm.mc.p <- lm(log1p(Fusarium)~ log1p(McT1)+cc+ pre.crop + block2,data=data.gen.dna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+             Df Sum Sq Mean Sq F value    Pr(>F)    
+log1p(McT1)   1  4.342  4.3424  8.2033  0.005086 ** 
+cc            9 20.580  2.2866  4.3197 8.972e-05 ***
+pre.crop      3  0.115  0.0383  0.0724  0.974637    
+block2        3  5.684  1.8945  3.5789  0.016530 * 
+
+```{r}
+data.gen.dna.s$Penicillium
+sum((data.gen.dna.s$Penicillium)>0) #105/118
+lm.mc.p <- lm(log1p(Penicillium)~ log1p(McT1)+ cc+pre.crop + block2,data=data.gen.dna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+             Df Sum Sq Mean Sq F value   Pr(>F)
+log1p(McT1)   1  1.368 1.36753  2.1531  0.14539    
+cc            9 24.893 2.76588  4.3548 8.16e-05 ***
+pre.crop      3  0.346 0.11522  0.1814  0.90880    
+block2        3  4.645 1.54837  2.4379  0.06892 .  
+Residuals   101 64.149 0.63514 
+
+```{r}
+data.gen.dna.s$Nematoctonus
+sum((data.gen.dna.s$Nematoctonus)>0) #4/118
+```
+
+```{r}
+data.gen.dna.s$Coprinus
+#no data
+```
+
+```{r}
+data.gen.dna.s$Coprinellus
+sum((data.gen.dna.s$Coprinellus)>0) #2/118
+```
+
+```{r}
+data.gen.dna.s$Stropharia
+#all zero
+```
+
+
+```{r}
+data.gen.dna.s$Paraglomus
+#none
+```
+
+```{r}
+data.gen.dna.s$Mortierella
+sum((data.gen.dna.s$Mortierella)>0) #48/118
+lm.mc.p <- lm(log1p(Mortierella)~ log1p(McT1)+ cc+pre.crop + block2,data=data.gen.dna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+```
+             Df Sum Sq Mean Sq F value   Pr(>F)   
+log1p(McT1)   1  0.000 0.00011  0.0003 0.987080   
+cc            9  9.993 1.11031  2.7656 0.006198 **
+pre.crop      3  0.600 0.20016  0.4986 0.684112   
+block2        3  0.602 0.20062  0.4997 0.683335
+
+```{r}
+data.gen.dna.s$Monacrosporium
+sum((data.gen.dna.s$Monacrosporium)>0) #7/118
+#all zero
+```
+
+####
+RNA
+#### use lm on log transformed
+
+```{r}
+#"Penicillium"  "Arthrobotrys" "Trichoderma" 
+#[26] "Fusarium"     "Haptocillium" "Coprinellus"  #"Paraglomus"   "Mortierella" 
+
+data.gen.rna.s
+```
+
+```{r}
+sum((data.gen.rna.s$Penicillium)>0) #26/117
+lm.mc.p <- lm(log1p(Penicillium)~ log1p(McT1)+cc+ pre.crop+block2,data=data.gen.rna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+plotResiduals(simulationOutput, form = data.gen.rna.s$McT1)
+plotResiduals(simulationOutput, form = data.gen.rna.s$pre.crop)
+res <- residuals(lm.mc.p) 
+ggqqplot(res)
+shapiro.test(res)
+ggdensity(res)
+```
+no significant effect of any factor
+
+```{r}
+sum((data.gen.rna.s$Arthrobotrys)>0) #78/117
+lm.mc.p <- lm(log1p(Arthrobotrys)~ log1p(McT1)+cc+ pre.crop+block2,data=data.gen.rna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+plotResiduals(simulationOutput, form = data.gen.rna.s$McT1)
+plotResiduals(simulationOutput, form = data.gen.rna.s$pre.crop)
+res <- residuals(lm.mc.p) 
+ggqqplot(res)
+shapiro.test(res)
+ggdensity(res)
+```
+
+```{r}
+data.gen.rna.s$Trichoderma
+sum((data.gen.rna.s$Trichoderma)>0) #65/117
+lm.mc.p <- lm(log1p(Trichoderma)~ log1p(McT1)+cc+ pre.crop + block2,data=data.gen.rna.s)
+summary(lm.mc.p)
+anova(lm.mc.p)
+```
+
+```{r}
+data.gen.rna.s$Fusarium
+sum((data.gen.rna.s$Fusarium)>0) #94/117
+lm.mc.p <- lm(log1p(Fusarium)~ log1p(McT1)+ cc+pre.crop + block2,data=data.gen.rna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+
+```{r}
+data.gen.rna.s$Penicillium
+sum((data.gen.rna.s$Penicillium)>0) #26/117
+#many zero - very wrong model
+lm.mc.p <- lm(log1p(Penicillium)~ log1p(McT1)+ cc+pre.crop + block2,data=data.gen.rna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+    
+```{r}
+data.gen.rna.s$Coprinellus
+#not enough data
+sum((data.gen.rna.s$Coprinellus)>0) #(2>0)
+```
+
+```{r}
+data.gen.rna.s$Paraglomus
+sum((data.gen.rna.s$Paraglomus)>0) #(2>0)
+#not enough data
+```
+
+```{r}
+data.gen.rna.s$Mortierella
+sum((data.gen.rna.s$Mortierella)>0) #(63>0)
+lm.mc.p <- lm(log1p(Mortierella)~ log1p(McT1)+ cc+pre.crop + block2,data=data.gen.rna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+```{r}
+data.gen.rna.s$Dactylella #(3>0)
+#all zero
+```
+
+```{r}
+data.gen.rna.s$Monacrosporium
+#all zero
+```
+
+```{r}
+data.gen.rna.s$Orbilia
+#all 0
+```
+
+```{r}
+data.gen.rna.s$Hirsutella
+#all 0
+```
+
+```{r}
+data.gen.rna.s$Coprinus
+#all 0
+```
+
+```{r}
+data.gen.rna.s$Nematoctonus
+#all 0
+```
+
+```{r}
+data.gen.rna.s$Stropharia
+#all 0
+```
+
+###
+####################################################
+Species
+```{r}
+ant.gen.dna.s <- microbiome::aggregate_taxa(ant.fun.dna.gen.rar, "Species")
+samdf.gen.dna.s <-as.data.frame(sample_data (ant.gen.dna.s))
+otu.gen.dna.s <- as.data.frame (t(otu_table(ant.gen.dna.s)))
+tax.gen.dna.s <- as.data.frame(tax_table(ant.gen.dna.s))
+
+data.gen.dna.s <- merge (samdf.gen.dna.s, otu.gen.dna.s,  by = 'row.names')
+colnames(data.gen.dna.s)
+
+data.gen.dna.s <- data.gen.dna.s %>% dplyr::filter (sample.type == "rhizo") 
+colnames(data.gen.dna.s)
+data.gen.dna.s$pre.crop <- as.factor(data.gen.dna.s$pre.crop)
+
+data.gen.dna.s$pre.crop <- fct_relevel(data.gen.dna.s$pre.crop, "er", "ir", "ry", "bo")
+
+#"Arthrobotrys_brochopaga"  "Arthrobotrys_dactyloides"
+#[25] "Arthrobotrys_iridis"      #"Arthrobotrys_oligospora" 
+#[27] "Arthrobotrys_reticulata"  "Acremonium_furcatum"#
+#[29] "Drechmeria_coniospora"    #"Haptocillium_balanoides" 
+#[31] "Nematoctonus_leiosporus"  #"Mortierella_elongatula"  
+#[33] "Mortierella_globalpina"   "Mortierella_sp" 
+```
+
+```{r}
+data.gen.dna.s$Arthrobotrys_brochopaga
+#not enough
+```
+
+```{r}
+data.gen.dna.s$Arthrobotrys_dactyloides
+lm.mc.p <- lm(log1p(Arthrobotrys_dactyloides)~ log1p(McT1)+ pre.crop + block2,data=data.gen.dna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+```{r}
+data.gen.dna.s$Arthrobotrys_iridis
+lm.mc.p <- lm(log1p(Arthrobotrys_iridis)~ log1p(McT1)+ pre.crop + block2,data=data.gen.dna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+```{r}
+data.gen.dna.s$Arthrobotrys_oligospora
+lm.mc.p <- lm(log1p(Arthrobotrys_oligospora)~ log1p(McT1)+ pre.crop + block2,data=data.gen.dna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+```{r}
+data.gen.dna.s$Arthrobotrys_reticulata
+lm.mc.p <- lm(log1p(Arthrobotrys_reticulata)~ log1p(McT1)+ pre.crop + block2,data=data.gen.dna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+```{r}
+data.gen.dna.s$Drechmeria_coniospora
+lm.mc.p <- lm(log1p(Drechmeria_coniospora)~ log1p(McT1)+ pre.crop + block2,data=data.gen.dna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+
+```{r}
+ant.gen.rna.s <- microbiome::aggregate_taxa(ant.fun.rna.gen.rar, "Species")
+samdf.gen.rna.s <-as.data.frame(sample_data (ant.gen.rna.s))
+otu.gen.rna.s <- as.data.frame (t(otu_table(ant.gen.rna.s)))
+tax.gen.rna.s <- as.data.frame(tax_table(ant.gen.rna.s))
+
+data.gen.rna.s <- merge (samdf.gen.rna.s, otu.gen.rna.s,  by = 'row.names')
+colnames(data.gen.rna.s)
+
+data.gen.rna.s <- data.gen.rna.s %>% dplyr::filter (sample.type == "rhizo") 
+colnames(data.gen.rna.s)
+data.gen.rna.s$pre.crop <- as.factor(data.gen.rna.s$pre.crop)
+data.gen.rna.s$pre.crop <- fct_relevel(data.gen.rna.s$pre.crop, "er", "ir", "ry", "bo")
+
+#"Arthrobotrys_brochopaga" "Arthrobotrys_iridis"    
+#[25] "Arthrobotrys_oligospora" #"Haptocillium_balanoides" "Mortierella_globalpina" 
+#[28] "Mortierella_sp" 
+```
+
+```{r}
+data.gen.rna.s$Arthrobotrys_brochopaga
+#almost all zeros
+```
+
+```{r}
+data.gen.rna.s$Arthrobotrys_iridis
+lm.mc.p <- lm(log1p(Arthrobotrys_iridis)~ log1p(McT1)+ pre.crop + block2,data=data.gen.rna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+```{r}
+data.gen.rna.s$Arthrobotrys_oligospora
+lm.mc.p <- lm(log1p(Arthrobotrys_oligospora)~ log1p(McT1)+ pre.crop + block2,data=data.gen.rna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
+
+```{r}
+data.gen.rna.s$Mortierella_sp
+lm.mc.p <- lm(log1p(Mortierella_sp)~ log1p(McT1)+ pre.crop + block2,data=data.gen.rna.s)
+anova(lm.mc.p)
+summary(lm.mc.p)
+res <- residuals(lm.mc.p)
+shapiro.test(res)
+testDispersion(lm.mc.p)
+simulationOutput <- simulateResiduals(fittedModel = lm.mc.p, plot = T)
+```
