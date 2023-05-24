@@ -67,7 +67,7 @@ save(ps.bact, file = './Bacteria/ps-selected-only-bact2.RData') #bact2 for nex a
 load(file = './bact/ps-selected-only-bact2.RData')
 ```
 
-a) remove contaminants - no for fungi
+a) remove contaminants
 ```{r}
 library(decontam)
 df <- as.data.frame(sample_data(ps.bact)) # Put sample_data into a ggplot-friendly data.frame
@@ -90,34 +90,7 @@ table(contamdf.prev01$contaminant)
 
 head(which(contamdf.prev01$contaminant))
 #12 19 43 47 49 61
-```
 
-```{r}
-ps.contam <- prune_taxa(contamdf.prev01$contaminant, ps.bact)
-ps.contam
-plot_bar(ps.contam, x = "sample.type", y = "Abundance") + #fill = "genus"
-  facet_wrap(. ~ Phylum)
-
-check_taxa <- subset_taxa(ps.bact, Phylum == "Proteobacteria") #Pasteurellaceae #Oxalofunteraceae #Pseudomonadaceae
-plot_bar(check_taxa, x = "sample.type", y = "Abundance", fill = "Genus")
-
-ps.bact1 <- prune_taxa(!contamdf.prev01$contaminant, ps.bact)
-ps.bact1
-```
-
-```{r}
-ps.pa <- transform_sample_counts(ps.bact, function(abund) 1*(abund>0))
-ps.pa.neg <- prune_samples(sample_data(ps.pa)$sample.type == "NEG", ps.pa)
-ps.pa.pos <- prune_samples(sample_data(ps.pa)$sample.type == "rhizo" | sample_data(ps.pa)$sample.type == "bulk", ps.pa)
-# Make data.frame of prevalence in positive and negative samples
-df.pa <- data.frame(pa.pos=taxa_sums(ps.pa.pos),
-                    pa.neg=taxa_sums(ps.pa.neg),
-                    contaminant=contamdf.prev01$contaminant)
-ggplot(data=df.pa, aes(x=pa.neg, y=pa.pos, color=contaminant)) + geom_point() +
-  xlab("Prevalence (Negative Controls)") + ylab("Prevalence (True Samples)")
-```
-
-```{r}
 ps.bact <- prune_taxa(!contamdf.prev01$contaminant, ps.bact)
 ```
 
@@ -125,7 +98,7 @@ b)
 ## remove negatives 
 
 ```{r}
-ps.bact.neg <- subset_samples(ps.bact, sample.type == "NEG" ) #6 samples
+ps.bact.neg <- subset_samples(ps.bact, sample.type == "NEG" ) 
 save (ps.bact.neg, file= "./Bacteria/negative_samples_bact.Rdata")
 
 ps.bact <- subset_samples(ps.bact, !sample.type == "NEG") 
@@ -137,30 +110,10 @@ ps.bact@sam_data$cc
 c)remove low counts etc
 
 c1)
-
-https://www.bioconductor.org/packages/devel/bioc/vignettes/phyloseq/inst/doc/phyloseq-analysis.html
-
-###NO
-1. PREVALENCE - explore feature prevalence in the dataset, which we will define here as the number of samples in which a taxa appears at least once.
-```{r}
-# Compute prevalence of each feature, store as data.frame
-prevdf = apply(X = otu_table(ps.bact),
-                 MARGIN = ifelse(taxa_are_rows(ps.bact), yes = 1, no = 2),
-                 FUN = function(x){sum(x > 0)})
-# Add taxonomy and total read counts to this data.frame
-prevdf = data.frame(Prevalence = prevdf,
-                      TotalAbundance = taxa_sums(ps.bact),
-                      tax_table(ps.bact))
-plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))})
-
-
-```
-
 ```{r}
 #remove phyla that are NA
 ps.bact <-subset_taxa(ps.bact, !is.na(Phylum)& !Phylum%in% c("","uncharacterized"))
 ```
-
 
 c2)
 ```{r remove singletons}
@@ -176,13 +129,6 @@ otu_singletons <- as.data.frame(ps.singletons@otu_table)
 write.csv(otu_singletons, "./Bacteria/otu_table_singletons.csv", row.names=FALSE)
 save(ps.singletons, file = './Bacteria/psonlybactsingletons.RData')
 
-ps.nosingletons <- prune_taxa(taxa_sums(ps.bact) > 1, ps.bact)
-summarize_phyloseq(ps.nosingletons)
-length(which(taxa_sums(ps.nosingletons) <= 1))
-ps.nosingletons
-ps.bact
-
-#do on the actual ps.bact
 ps.bact <- prune_taxa(taxa_sums(ps.bact) > 1, ps.bact)
 ps.bact
 ```
@@ -244,66 +190,13 @@ T01.readcount$famcount <- colSums(famtab01 != 0)
 write.csv(T01.readcount, "./Bacteria/reads.asv.families per sample-T01.csv", row.names=TRUE)
 ```
 
-per time point T2
-```{r}
-ps.bact2 <- ps.bact %>% subset_samples(time.point == "T2")
-T2.readcount <- as.data.frame (readcount(ps.bact2))
-asv_df2 <- t(otu_table(ps.bact2))
-T2.readcount$asvcount <- colSums(asv_df2 != 0)
-
-famfac2 = factor(tax_table(ps.bact2)[, "Family"])
-# Try as before
-famtab2 = apply(otu_table(ps.bact2), MARGIN = 1, function(x) {
-    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
-
-T2.readcount$famcount <- colSums(famtab2 != 0)
-write.csv(ASV.reads, "./Bacteria/reads.asv.families per sample-T2.csv", row.names=FALSE)
-```
-
-
-per time point T3
-```{r}
-ps.bact3 <- ps.bact %>% subset_samples(time.point == "T3")
-T3.readcount <- as.data.frame (readcount(ps.bact3))
-asv_df3 <- t(otu_table(ps.bact3))
-T3.readcount$asvcount <- colSums(asv_df3 != 0)
-
-famfac3 = factor(tax_table(ps.bact3)[, "Family"])
-# Try as before
-famtab3 = apply(otu_table(ps.bact3), MARGIN = 1, function(x) {
-    tapply(x, INDEX = famfac, FUN = sum, na.rm = TRUE, simplify = TRUE)})
-
-T3.readcount$famcount <- colSums(famtab3 != 0)
-write.csv(ASV.reads, "./Bacteria/reads.asv.families per sample-T3.csv", row.names=FALSE) 
-```
-
 prune and check
 ```{r}
-sample_sums(ps.bact) > 20000 %>% sum
-ps.bact %>% subset_samples(time.point == "T1") %>% sample_sums > 20000 %>% sum 
-
-ps.bactpruned10000 <- prune_samples(sample_sums(ps.bact) > 10000, ps.bact)
-ps.bactpruned10000 #685 samples removed 6 samples
-
 ps.bact <- prune_samples(sample_sums(ps.bact) > 10000, ps.bact)
-ps.bact #685 samples removed 5 samples
-```
+ps.bact
 
-
-```{r}
 save(ps.bact, file = 'ps-selected-only-bact-filt-lowabd-no-neg2.RData')
 ps.bact@sam_data$sample.type
-```
-
-
-```{r}
-library(microbiome)
-write.table(ps.bact@tax_table@.Data, file = "./Bacteria/bact_tax_table.txt", sep = "\t")
-write.table(ps.bact@sam_data@.Data, file = "./Bacteria/bact_metadata_table.txt", sep = "\t")
-write.table(ps.bact@otu_table@.Data, file = "./Bacteria/bact_otu_table.txt", sep = "\t")
-
-#write_phyloseq(physeq.fungi, type = "OTU", path = "./")
-#write_phyloseq(ps.bact, type = "METADATA", path = "./bact/")
 ```
 
 
