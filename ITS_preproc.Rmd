@@ -31,9 +31,7 @@ sample_data(ITS_phy) <- sample_data(data)
 colnames(ITS_phy@sam_data)
 ```
 
-
 1.check reads count 
-
 ```{r}
 reads_sample <- as.data.frame (readcount(ITS_phy))
 sum(readcount(ITS_phy)) #162300940
@@ -62,12 +60,10 @@ table(tax_table(ITS_phy)[, "phylum"], exclude = NULL)
 ps.ITS <- subset_taxa(ITS_phy, Phylum %in% c("Ascomycota", "Basidiomycota", "Glomeromycota", "Mortierellomycota", "Neocallimastigomycota", "Olpidiomycota", "Rozellomycota","Zoopagomycota", "Aphelidiomycota", "Basidiobolomycota", "Entomophthoromycota", "Chytridiomycota", "Monoblepharomycota", "Mucoromycota"))
 ps.ITS
 
-
 save(ps.ITS, file = './ITS/ps-selected-only-ITS.RData')
 ```
 
 3. filtering
-
 ```{r}
 load(file = './ITS/ps-selected-only-ITS.RData')
 ```
