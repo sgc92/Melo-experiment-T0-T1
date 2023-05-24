@@ -1,0 +1,206 @@
+---
+title: "trial microbiome"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+library(hrbrthemes)
+library(microbiome)
+library(dplyr)
+library(phyloseq)
+library(hrbrthemes)
+library(gcookbook)
+library(tidyverse)
+library(ggplot2)
+library(RColorBrewer)
+library(metagMisc)
+```
+Load dataset and reorder
+```{r}
+load (file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
+ps.ITS@sam_data$pre.crop <- fct_relevel(ps.ITS@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ps.ITS@sam_data$cc <- fct_relevel(ps.ITS@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","PHA.OSR_T", "VE.OSR_T", "BO.OSR_T", "BO.OSR_R")
+```
+
+Select dataset
+```{r}
+ps.ITS.t1 <- subset_samples(ps.ITS, time.point == "T1")
+ps.ITS.t1 = prune_taxa(taxa_sums(ps.ITS.t1) > 0, ps.ITS.t1)
+ps.ITS.t1
+sample_names(ps.ITS.t1)
+
+ps.ITS.t1.dna <- subset_samples(ps.ITS.t1, nucleic.acid == "DNA")
+ps.ITS.t1.dna = prune_taxa(taxa_sums(ps.ITS.t1.dna) > 0, ps.ITS.t1.dna)
+ps.ITS.t1.dna
+
+ps.ITS.t1.rna <- subset_samples(ps.ITS.t1, nucleic.acid == "RNA")
+ps.ITS.t1.rna = prune_taxa(taxa_sums(ps.ITS.t1.rna) > 0, ps.ITS.t1.rna)
+ps.ITS.t1.rna
+```
+################################################################################################################ 
+Beta diversity
+
+Order datasets and select colours and shapes
+```{r}
+ps.ITS.t1.dna@sam_data$cc <- fct_relevel(ps.ITS.t1.dna@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","PHA.OSR_T", "VE.OSR_T", "BO.OSR_T", "BO.OSR_R")
+ps.ITS.t1.dna@sam_data$cc <- as.factor(ps.ITS.t1.dna@sam_data$cc)
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", BO.OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+shapeCode_pre.crop <- c("bo" = 19, "ry" = 15, "ir" = 17, "er" = 18)
+shapeCode1 <- c("monoculture" = 19, "mixture" = 15)
+```
+
+```{r}
+#Normalise in CSS
+ITS.dna_norm<- phyloseq_transform_css(ps.ITS.t1.dna, norm = TRUE, log = FALSE)
+#ordinate
+ord.ITS.dna_norm <- ordinate(ITS.dna_norm, "PCoA", "bray")
+#plot
+plot.ITS.dna_norm<- plot_ordination (ps.ITS.t1.dna, ord.ITS.dna_norm, type = "sites",
+                                 color = "cc",
+                                 shape = "culture",
+                                 title = expression(paste("PERMANOVA: ", R^2, "=0.24; p=0.001")), label = NULL)+
+                                 geom_point(aes(shape=culture),  size = 3) + 
+  #guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  scale_shape_manual (values = shapeCode1) +
+  scale_color_manual(values = colorCode2) + 
+  #scale_color_brewer(palette = "Paired")+
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE, alpha=0.5) +
+  #geom_text(aes(label = pre.crop), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=11),
+        axis.title.y = element_text(face="bold", colour="black", size=11),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+
+plot(plot.ITS.dna_norm)
+#ggplotly(plot.ITS.dna_norm)
+
+ggsave(file="./ITS/figures/PCoA T1 - ITS dna.svg", 
+       plot=plot.ITS.dna_norm, width=10, height=8, units = "in", device = "svg")
+```
+
+Test dispersion and PERMANOVA
+```{r}
+sampledf <- data.frame(sample_data(ITS.dna_norm))
+ITS.dna_norm_bray <- phyloseq::distance(ITS.dna_norm, method = "bray")
+dispersion<-betadisper(ITS.dna_norm_bray, group=sampledf$cc)
+permutest(dispersion) #0.457 Results show homogeonous dispersion
+plot(dispersion, hull=FALSE, ellipse=TRUE) ##sd ellipse
+adonis2(ITS.dna_norm_bray ~ block2+pre.crop * cc , data = sampledf, permutations = 999 )  
+```
+
+Pairwise permanova - considering only cover crop
+```{r}
+library(RVAideMemoire)
+#for cover crop
+pairwise.perm.manova(distance(ITS.dna_norm, "bray"), 
+                     fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = TRUE)
+```
+
+#NOT USED IN PAPER
+Pairwise permanova - considering block, pre crop and cover crop per each contrast
+```{r}
+sampledf.sel <- data.frame(cc=sampledf$cc)
+sampledf.sel$pre.crop <- sampledf$pre.crop
+sampledf.sel$block2 <- sampledf$block2
+rownames(sampledf.sel) <- row.names(sampledf)
+
+posthoc <- pairwise.adonis2(ITS.dna_norm_bray~cc+pre.crop+block2, data=sampledf.sel, strata="cc" )
+posthoc
+```
+
+
+####RNA
+```{r}
+#transform in CSS 
+ITS.rna_norm<- phyloseq_transform_css(ps.ITS.t1.rna, norm = TRUE, log = FALSE)
+#ordinate
+ord.ITS.rna_norm <- ordinate(ITS.rna_norm, "PCoA", "bray")
+#plot
+plot.ITS.rna_norm<- plot_ordination (ITS.rna_norm, ord.ITS.rna_norm, type = "sites",
+                                 color = "cc",
+                                 shape = "culture",
+                                 title = expression(paste("PERMANOVA: ", R^2, "=0.17; p=0.001")), label = NULL)+
+                                 geom_point(aes(shape=culture),  size = 3) + 
+  guides(colour = guide_legend(override.aes = list(shape = 15))) + 
+  #scale_colour_brewer(palette = "Paired")+
+  scale_shape_manual (values = shapeCode1)+
+  scale_color_manual(values = colorCode2) + 
+  #stat_ellipse(aes(group=pre.crop), type = "t", level = 0.95, segments = 51, na.rm = FALSE) +
+  #geom_text(aes(label = sample.id2), size=3) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #panel.background = element_blank(), axis.line = element_line(size = 1, colour = "black"),
+        rect = element_rect(fill = "white",  colour = "black",size = 1, linetype = 2),
+        axis.ticks = element_line(colour = "black"),
+        axis.title.x = element_text(face="bold", colour="black", size=11),
+        axis.title.y = element_text(face="bold", colour="black", size=11),
+        axis.text.x  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        axis.text.y  = element_text(face="bold", colour = "black", angle=360, vjust=0.5, size=9),
+        panel.background = element_rect(fill = "white", colour = "black", linetype = 1, size = 1),
+        panel.border = element_blank(),
+        legend.position = "right")
+
+plot(plot.ITS.rna_norm)
+
+#ggsave(file="./ITS/figures/PCoA T1 - ITS rna.svg", 
+#       plot=plot.ITS.rna_norm, width=10, height=8, units = "in", device = "svg")
+```
+
+Test dispersion and PERMANOVA
+```{r}
+sampledf <- data.frame(sample_data(ITS.rna_norm))
+ITS.rna_norm_bray <- phyloseq::distance(ITS.rna_norm, method = "bray")
+dispersion<-betadisper(ITS.rna_norm_bray, group=sampledf$cc)
+permutest(dispersion) #0.571 Results show homogeonous dispersion
+plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
+adonis2(ITS.rna_norm_bray ~ block2 + pre.crop * cc , data = sampledf)
+```
+
+Pairwise permanova - considering only cover crop
+```{r}
+library(RVAideMemoire)
+#for cover crop
+pairwise.perm.manova(distance(ITS.rna_norm, "bray"), 
+                     fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = FALSE)
+```
+
+#NOT USED IN PAPER
+Pairwise permanova - considering block, pre crop and cover crop per each contrast
+```{r}
+sampledf.sel <- data.frame(cc=sampledf$cc)
+sampledf.sel$pre.crop <- sampledf$pre.crop
+sampledf.sel$block2 <- sampledf$block2
+rownames(sampledf.sel) <- row.names(sampledf)
+
+posthoc <- pairwise.adonis2(ITS.rna_norm_bray~cc+pre.crop+block2, data=sampledf.sel, strata="cc" )
+posthoc
+```
+
+Combine plots
+```{r}
+library(cowplot)
+legend <- get_legend(
+  # create some space to the left of the legend
+  plot.ITS.rna_norm + theme(legend.box.margin = margin(0,0,10,5))
+)
+
+figITS <- cowplot::plot_grid(
+   plot.ITS.dna_norm + theme(legend.position="none", title = element_blank()), 
+   plot.ITS.rna_norm+ theme(legend.position="none", title = element_blank()),
+  nrow = 1, ncol = 2, scale = 1,
+  hjust = 1) 
+figITS
+
+figITSL <- plot_grid(figITS, legend, rel_widths = c(2, 0.5)) 
+figITSL
+
+#ggsave(file="./ITS/figures/PCoA T1- ITS dna vs rna-ellipses.svg", plot=figITSL, 
+       width=150, height=100, units = "mm", device = "svg", scale=1.5)
+```
