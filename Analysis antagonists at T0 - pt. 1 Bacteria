@@ -137,8 +137,8 @@ dispersion<-betadisper(ant.bact.dna.gen.css_bray , group=sampledf$pre.crop)
 permutest(dispersion) #0.197
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
-adonis2(ant.bact.dna.gen.css_bray ~ block2+pre.crop+sample.type , data = sampledf, permutations = 999 )
-adonis2(ant.bact.dna.gen.css_bray ~ block2+McT0+sample.type , data = sampledf, permutations = 999 )
+adonis2(ant.bact.dna.gen.css_bray ~ block2+sample.type+pre.crop , data = sampledf, permutations = 999 )
+adonis2(ant.bact.dna.gen.css_bray ~ block2+sample.type+mc.pi.sh , data = sampledf, permutations = 999 )
 
 #RNA
 sampledf <- data.frame(sample_data(subset_samples(ant.bact.rna.gen.css, time.point == "T0")))
@@ -147,8 +147,8 @@ dispersion<-betadisper(ant.bact.rna.gen.css_bray , group=sampledf$pre.crop)
 permutest(dispersion) #0.626
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
-adonis2(ant.bact.rna.gen.css_bray ~ block2 +pre.crop+sample.type , data = sampledf, permutations = 999 )
-adonis2(ant.bact.rna.gen.css_bray ~ block2 +McT0+sample.type , data = sampledf, permutations = 999 )
+adonis2(ant.bact.rna.gen.css_bray ~ block2 +sample.type +pre.crop , data = sampledf, permutations = 999 )
+adonis2(ant.bact.rna.gen.css_bray ~ block2 +sample.type+mc.pi.sh , data = sampledf, permutations = 999 )
 ```
 
 #######################################################################################################################
