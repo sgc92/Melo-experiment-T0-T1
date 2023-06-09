@@ -93,7 +93,10 @@ ITS.dna_norm_bray <- phyloseq::distance(ITS.dna_norm, method = "bray")
 dispersion<-betadisper(ITS.dna_norm_bray, group=sampledf$cc)
 permutest(dispersion) #0.457 Results show homogeonous dispersion
 plot(dispersion, hull=FALSE, ellipse=TRUE) ##sd ellipse
-adonis2(ITS.dna_norm_bray ~ block2+pre.crop * cc , data = sampledf, permutations = 999 )  
+#PERMANOVA
+adonis2(ITS.dna_norm_bray ~ block2+pre.crop * cc , data = sampledf, permutations = 999 )
+adonis2(ITS.dna_norm_bray ~ block2+ mc.pi.sh* cc , data = sampledf, permutations = 999 )
+adonis2(ITS.dna_norm_bray ~ block2+ McT0* cc , data = sampledf, permutations = 999 )
 ```
 
 Pairwise permanova - considering only cover crop
@@ -160,7 +163,10 @@ ITS.rna_norm_bray <- phyloseq::distance(ITS.rna_norm, method = "bray")
 dispersion<-betadisper(ITS.rna_norm_bray, group=sampledf$cc)
 permutest(dispersion) #0.571 Results show homogeonous dispersion
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
+#PERMANOVA
 adonis2(ITS.rna_norm_bray ~ block2 + pre.crop * cc , data = sampledf)
+adonis2(ITS.rna_norm_bray ~ block2+ mc.pi.sh* cc , data = sampledf, permutations = 999 )
+adonis2(ITS.rna_norm_bray ~ block2+ McT0* cc , data = sampledf, permutations = 999 )
 ```
 
 Pairwise permanova - considering only cover crop
