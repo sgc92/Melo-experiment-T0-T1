@@ -133,7 +133,9 @@ dispersion<-betadisper(ant.bact.dna.gen.css_bray , group=sampledf$cc)
 permutest(dispersion) #0.891
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
-adonis2(ant.bact.dna.gen.css_bray ~ block2+ pre.crop*cc, data = sampledf, permutations = 999 )
+adonis2(ant.bact.dna.gen.css_bray ~ block2+ pre.crop*cc, data = sampledf, permutations = 999 ) #using pre-crops
+adonis2(ant.bact.dna.gen.css_bray ~ block2+mc.pi.sh*cc , data = sampledf, permutations = 999 ) #using Mc levels
+adonis2(ant.bact.dna.gen.css_bray ~ block2+as.numeric(log1p(McT0))*cc , data = sampledf, permutations = 999 )#using Melo counts
 
 library(RVAideMemoire)
 pairwise.perm.manova(distance(ant.bact.dna.gen_css, "bray"), 
@@ -148,6 +150,8 @@ permutest(dispersion) #0.089
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
 adonis2(ant.bact.rna.gen.css_bray ~ block2+pre.crop*cc , data = sampledf, permutations = 999 )
+adonis2(ant.bact.rna.gen.css_bray ~ block2+mc.pi.sh*cc , data = sampledf, permutations = 999 )
+adonis2(ant.bact.rna.gen.css_bray ~ block2+as.numeric(log1p(McT0))*cc , data = sampledf, permutations = 999 )
 
 pairwise.perm.manova(distance(ant.bact.rna.gen_css, "bray"), 
                      fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = TRUE)
