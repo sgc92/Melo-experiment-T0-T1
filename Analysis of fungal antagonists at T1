@@ -146,6 +146,8 @@ permutest(dispersion) #0.891
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
 adonis2(ant.fun.dna.gen.css_bray ~ block2+pre.crop*cc , data = sampledf, permutations = 999 )
+adonis2(ant.fun.dna.gen.css_bray ~ block2+mc.pi.sh*cc , data = sampledf, permutations = 999 )
+adonis2(ant.fun.dna.gen.css_bray ~ block2+as.numeric(log1p(McT0))*cc , data = sampledf, permutations = 999 )
 
 pairwise.perm.manova(distance(ant.fun.dna.gen_css, "bray"), 
                      fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = TRUE)
@@ -158,6 +160,8 @@ permutest(dispersion) #0.089
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
 adonis2(ant.fun.rna.gen.css_bray ~ block2+pre.crop*cc , data = sampledf, permutations = 999 )
+adonis2(ant.fun.rna.gen.css_bray ~ block2+mc.pi.sh*cc , data = sampledf, permutations = 999 )
+adonis2(ant.fun.rna.gen.css_bray ~ block2+as.numeric(log1p(McT0))*cc , data = sampledf, permutations = 999 )
 
 pairwise.perm.manova(distance(ant.fun.rna.gen_css, "bray"), 
                      fact = sampledf$cc, nperm = 999, p.method = "BH", R2 = TRUE)
