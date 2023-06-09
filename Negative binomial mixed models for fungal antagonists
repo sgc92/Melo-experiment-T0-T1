@@ -24,9 +24,10 @@ library(lme4)
 library(data.table)
 library(vcd)
 ```
-Models to check if antagonist readcounts is explained by pre-crops at T0 and cover-crops at T1
 
-1. T0
+########################################################################################################################
+Relation of antagonists with nematode count
+
 ```{r}
 load (file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
 ps.ITS.dna.t0 <- subset_samples(ps.ITS, nucleic.acid == "DNA" & time.point == "T0"& sample.type == "rhizo")
@@ -34,12 +35,12 @@ ps.ITS.rna.t0 <- subset_samples(ps.ITS, nucleic.acid == "RNA" & time.point == "T
 ps.ITS.dna.t0@sam_data$readcount.tot <- readcount(ps.ITS.dna.t0)
 ps.ITS.rna.t0@sam_data$readcount.tot <- readcount(ps.ITS.rna.t0)
 
-ant.ITS.dna.t0.gen <- subset_taxa(ps.ITS.dna.t0, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+ant.ITS.dna.t0.gen <- subset_taxa(ps.ITS.dna.t0, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella","Acremonium", "Dactylellina","Acremonium",
                                                                       "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
                                                                       "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
                                                                       "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
                                                                       "Mortierella", "Monacrosporium"))
-ant.ITS.rna.t0.gen <- subset_taxa(ps.ITS.rna.t0, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+ant.ITS.rna.t0.gen <- subset_taxa(ps.ITS.rna.t0, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella","Acremonium", "Dactylellina","Acremonium",
                                                                       "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
                                                                       "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
                                                                       "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
@@ -58,11 +59,11 @@ samdf.itsgen.dna.t0.s$readcount <- rowSums(otu.itsgen.dna.t0.s[1:18])
 data.itsgen.dna.t0.s <- merge (samdf.itsgen.dna.t0.s, otu.itsgen.dna.t0.s,  by = 'row.names')
 colnames(data.itsgen.dna.t0.s)
 
-data.itsgen.dna.t0.s$pre.crop <- as.factor(data.itsgen.dna.t0.s$pre.crop)
+data.itsgen.dna.t0.s$mc.pi.sh <- as.factor(data.itsgen.dna.t0.s$mc.pi.sh)
 
 #"Penicillium"    "Arthrobotrys"   "Dactylella"     "Dactylellina" "Monacrosporium" "Orbilia"        "Lecanicillium"  "Trichoderma" "Fusarium"       "Drechmeria"     "Haptocillium"   "Hirsutella" "Coprinus" "Nematoctonus"   "Coprinellus"    "Stropharia" "Paraglomus"     "Mortierella" 
 
-data.itsgen.dna.t0.s$pre.crop <- fct_relevel(data.itsgen.dna.t0.s$pre.crop, "er", "ir", "ry", "bo")
+data.itsgen.dna.t0.s$mc.pi.sh <- fct_relevel(data.itsgen.dna.t0.s$mc.pi.sh, "Low", "Medium", "High")
 ITS.antagonists <- c("Penicillium","Arthrobotrys","Dactylella","Dactylellina", "Monacrosporium", "Orbilia","Lecanicillium","Trichoderma", "Fusarium","Drechmeria","Haptocillium","Hirsutella","Coprinus","Nematoctonus","Coprinellus","Stropharia","Paraglomus","Mortierella")
 ```
 
@@ -78,141 +79,243 @@ data.itsgen.rna.t0.s <- merge (samdf.itsgen.rna.t0.s, otu.itsgen.rna.t0.s,  by =
 colnames(data.itsgen.rna.t0.s)
 
 colnames(data.itsgen.rna.t0.s)
-data.itsgen.rna.t0.s$pre.crop <- as.factor(data.itsgen.rna.t0.s$pre.crop)
-#"Penicillium"    "Arthrobotrys"   "Dactylella"     "Dactylellina" "Monacrosporium" "Orbilia" "Lecanicillium"  "Trichoderma" "Fusarium"       "Drechmeria"     "Haptocillium"   "Hirsutella" "Coprinus"       "Nematoctonus"   "Coprinellus"    "Stropharia" "Paraglomus" "Mortierella"
+data.itsgen.rna.t0.s$mc.pi.sh <- as.factor(data.itsgen.rna.t0.s$mc.pi.sh)
 
-data.itsgen.rna.t0.s$pre.crop <- fct_relevel(data.itsgen.rna.t0.s$pre.crop, "er", "ir", "ry", "bo")
+data.itsgen.rna.t0.s$mc.pi.sh <- fct_relevel(data.itsgen.rna.t0.s$mc.pi.sh, "Low", "Medium", "High")
 ```
 
 
-#plots
+for understanding output look at https://www.middleprofessor.com/files/applied-biostatistics_bookdown/_book/counts.html
+reference : Negative binomial mixed models for analyzing microbiome count data, Zhang et al , 2017, https://doi.org/10.1186/s12859-016-1441-7
+
+https://github.com/nyiuab/NBZIMM
+
+DNA
 ```{r}
-data.genits.dna.t0.s.long <- data.itsgen.dna.t0.s %>%
-  dplyr::select(pre.crop,readcount.tot, Arthrobotrys, Fusarium, Mortierella,Trichoderma) %>% 
-  tidyr::pivot_longer(cols = Arthrobotrys:Trichoderma, 
-               names_to = "Genus", 
-               values_to = "Abundance") %>% 
-              mutate (Rel.abundance.DNA = (Abundance/readcount.tot)) 
-data.genits.dna.t0.s.long$pre.crop <- forcats::fct_relevel(data.genits.dna.t0.s.long$pre.crop, "bo", "ry", "ir", "er" )
-  
-data.genits.rna.t0.s.long <- data.itsgen.rna.t0.s %>% 
-  dplyr::select(pre.crop,readcount.tot,Arthrobotrys, Fusarium, Mortierella,Trichoderma) %>% 
-  tidyr::pivot_longer(cols = Arthrobotrys:Trichoderma, 
-               names_to = "Genus", 
-               values_to = "Abundance") %>% 
-  mutate (Rel.abundance.RNA = (Abundance/readcount.tot)) 
-data.genits.rna.t0.s.long$pre.crop <- forcats::fct_relevel(data.genits.rna.t0.s.long$pre.crop, "bo", "ry", "ir", "er" )
-
-#horizontal 
-colorCode <- c(bo = "#D55E00", ry = "#E69F00", ir = "#F0E442",  er = "#009E73")
-
-plot.ant.its.dna.t0h<- data.genits.dna.t0.s.long %>%  
-                        ggplot (mapping = aes(y=Rel.abundance.DNA, x =pre.crop, fill = pre.crop))+
-                        geom_boxplot(orientation = "x", fatten = 1)+
-                        #geom_point(alpha = 0.5)+
-                        scale_y_continuous(limits = c(0,0.06), labels = scales::percent)+
-                        scale_fill_manual(values = colorCode)+
-                        labs(title = "Relative abundance of antagonistic fungal genera in DNA", y = "Relative abundance")+
-                        facet_wrap(vars(Genus), scales = "fixed", strip.position = "top", nrow = 1)+
-   theme_classic()+
-  theme(axis.line.y.left = (element_blank()), 
-        axis.text.x = (element_text(angle = 90, size = 10)),
-        strip.text.x = element_text(size = 8))
-plot.ant.its.dna.t0h
-
-plot.ant.its.rna.t0h<- data.genits.rna.t0.s.long %>%  
-                        ggplot (mapping = aes(y=Rel.abundance.RNA, x =pre.crop, fill = pre.crop))+
-                        geom_boxplot(orientation = "x", fatten = 1)+
-                        #geom_point(alpha = 0.5)+
-                        scale_y_continuous(limits = c(0,0.06), labels = scales::percent)+
-                        scale_color_manual(values = colorCode)+
-                        scale_fill_manual(values = colorCode)+
-                        labs(title = "Relative abundance of antagonistic fungal genera in RNA", y = "Relative abundance ")+
-                        facet_wrap(vars(Genus), scales = "fixed", strip.position = "top", nrow = 1)+
-   theme_classic()+
-  theme(axis.line.y.left = (element_blank()), 
-        axis.text.x = (element_text(angle = 90, size = 10)),
-        strip.text.x = element_text(size = 8))
-plot.ant.its.rna.t0h
-
-library(cowplot)
-#ant.t0 <- plot_grid(plot.ant.bact.dna.t0h, 
-#                    plot.ant.bact.rna.t0h,
-#                    align = "hv",
-#                    ncol = 1)
-#ant.t0 
+length(which(data.itsgen.dna.t0.s$Penicillium > 0))#12
+length(which(data.itsgen.dna.t0.s$Arthrobotrys > 0))#12
+length(which(data.itsgen.dna.t0.s$Dactylella > 0))#1
+length(which(data.itsgen.dna.t0.s$Dactylellina > 0))#1
+length(which(data.itsgen.dna.t0.s$Lecanicillium > 0))#1
+length(which(data.itsgen.dna.t0.s$Trichoderma > 0))#12
+length(which(data.itsgen.dna.t0.s$Acremonium > 0))#8
+length(which(data.itsgen.dna.t0.s$Fusarium > 0))#12
+length(which(data.itsgen.dna.t0.s$Drechmeria > 0))#1
+length(which(data.itsgen.dna.t0.s$Haptocillium > 0))#5
+length(which(data.itsgen.dna.t0.s$Hirsutella > 0))#5
+length(which(data.itsgen.dna.t0.s$Nematoctonus > 0))#7
+length(which(data.itsgen.dna.t0.s$Coprinellus > 0))#2
+length(which(data.itsgen.dna.t0.s$Mortierella > 0))#12
 
 ```
-#check prevalence of genera in dataset
+
+RNA
 ```{r}
-data.itsgen.dna.t0.s$Arthrobotrys #(12/12)
-data.itsgen.dna.t0.s$Dactylella #(1>0)
-data.itsgen.dna.t0.s$Dactylellina #(1>0)
-data.itsgen.dna.t0.s$Monacrosporium #(NA)
-data.itsgen.dna.t0.s$Orbilia #(NA)
-data.itsgen.dna.t0.s$Lecanicillium #(1>0)
-data.itsgen.dna.t0.s$Trichoderma #(12/12, all)
-data.itsgen.dna.t0.s$Fusarium #(12/12)
-data.itsgen.dna.t0.s$Drechmeria #(1>0)
-data.itsgen.dna.t0.s$Haptocillium #(5/12)
-data.itsgen.dna.t0.s$Hirsutella #(5/12)
-data.itsgen.dna.t0.s$Coprinus #(NA)
-data.itsgen.dna.t0.s$Coprinellus #(2/12)
-data.itsgen.dna.t0.s$Stropharia #(NA)
-data.itsgen.dna.t0.s$Paraglomus #(NA) 
-data.itsgen.dna.t0.s$Mortierella #(12/12)
+length(which(data.itsgen.rna.t0.s$Penicillium > 0))#6
+length(which(data.itsgen.rna.t0.s$Arthrobotrys > 0))#7
+length(which(data.itsgen.rna.t0.s$Trichoderma > 0))#10
+length(which(data.itsgen.rna.t0.s$Fusarium > 0))#12
+length(which(data.itsgen.rna.t0.s$Coprinellus > 0))#1
+length(which(data.itsgen.rna.t0.s$Paraglomus > 0))#1
+length(which(data.itsgen.rna.t0.s$Mortierella > 0))#9
+```
+
+To test:
+```{r}
+#DNA
+length(which(data.itsgen.dna.t0.s$Penicillium > 0))#12
+length(which(data.itsgen.dna.t0.s$Arthrobotrys > 0))#12
+length(which(data.itsgen.dna.t0.s$Trichoderma > 0))#12
+length(which(data.itsgen.dna.t0.s$Acremonium > 0))#8
+length(which(data.itsgen.dna.t0.s$Fusarium > 0))#12
+length(which(data.itsgen.dna.t0.s$Haptocillium > 0))#5
+length(which(data.itsgen.dna.t0.s$Hirsutella > 0))#5
+length(which(data.itsgen.dna.t0.s$Nematoctonus > 0))#7
+length(which(data.itsgen.dna.t0.s$Mortierella > 0))#12
+
+#RNA
+length(which(data.itsgen.rna.t0.s$Penicillium > 0))#6
+length(which(data.itsgen.rna.t0.s$Arthrobotrys > 0))#7
+length(which(data.itsgen.rna.t0.s$Trichoderma > 0))#10
+length(which(data.itsgen.rna.t0.s$Fusarium > 0))#12
+length(which(data.itsgen.rna.t0.s$Mortierella > 0))#9
+```
+
+#mc levels
+
+Acremonium
+```{r}
+#test for levels
+acr.dna.pcrand <- glmmTMB(Acremonium ~  mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(acr.dna.pcrand)
+knitr::kable(summary(acr.dna.pcrand)$coefficients, digits = 4)
+car::Anova (acr.dna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = acr.dna.pcrand, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(acr.dna.pcrand, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 Arthrobotrys
 ```{r}
-#chosen model
-arth.dna.pc <- glmmTMB(Arthrobotrys ~  pre.crop,
+arth.dna.pcrand <- glmmTMB(Arthrobotrys ~  mc.pi.sh+(1|block2),
                       data = data.itsgen.dna.t0.s , 
-                      family = nbinom1 (link = "log"))
-summary(arth.dna.pc)
-knitr::kable(summary(arth.dna.pc)$coefficients, digits = 4)
-car::Anova (arth.dna.pc)
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(arth.dna.pcrand)
+knitr::kable(summary(arth.dna.pcrand)$coefficients, digits = 4)
+car::Anova (arth.dna.pcrand)
 
 #check model
-test <- simulateResiduals(fittedModel = arth.dna.pc, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(arth.dna.pc)
+test <- simulateResiduals(fittedModel = arth.dna.pcrand, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
 
 #EMMEANS
-ref_grid(arth.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(arth.dna.pc, "pre.crop", type = "response")
+emm.res <- emmeans(arth.dna.pcrand, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
+
 Fusarium
 ```{r}
-#chosen model
-fus.dna.pc <- glmmTMB(Fusarium ~  pre.crop,
+fus.dna.pcrandoff <- glmmTMB(Fusarium ~  mc.pi.sh+(1|block2),
                       data = data.itsgen.dna.t0.s , 
-                      family = nbinom1 (link = "log"))
-summary(fus.dna.pc)
-knitr::kable(summary(fus.dna.pc)$coefficients, digits = 4)
-car::Anova (fus.dna.pc)
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(fus.dna.pcrandoff)
+knitr::kable(summary(fus.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (fus.dna.pcrandoff)
 
 #check model
-test <- simulateResiduals(fittedModel = fus.dna.pc, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(fus.dna.pc)
+test <- simulateResiduals(fittedModel = fus.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
 
 #EMMEANS
-ref_grid(fus.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(fus.dna.pc, "pre.crop", type = "response")
+emm.res <- emmeans(fus.dna.pcrandoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Haptocillium
+```{r}
+hapt.dna.pcrandoff <- glmmTMB(Haptocillium ~  mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(hapt.dna.pcrandoff)
+knitr::kable(summary(hapt.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (hapt.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = hapt.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(hapt.dna.pcrandoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Hirsutella
+```{r}
+hirs.dna.pcrandoff <- glmmTMB(Hirsutella ~  mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(hirs.dna.pcrandoff)
+knitr::kable(summary(hirs.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (hirs.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = hirs.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(hirs.dna.pcrandoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Mortierella
+```{r}
+mort.dna.pcrandoff <- glmmTMB(Mortierella ~  mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(mort.dna.pcrandoff)
+knitr::kable(summary(mort.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (mort.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = mort.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(mort.dna.pcrandoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Nematoctonus
+```{r}
+nemat.dna.pcrandoff <- glmmTMB(Nematoctonus ~  mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(nemat.dna.pcrandoff)
+knitr::kable(summary(nemat.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (nemat.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = nemat.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(nemat.dna.pcrandoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Penicillium
+```{r}
+pen.dna.pcrandoff <- glmmTMB(Penicillium ~  mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.dna.pcrandoff)
+knitr::kable(summary(pen.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (pen.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = pen.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(pen.dna.pcrandoff, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 Trichoderma
 ```{r}
-#chosen model 
-trich.dna.pcoff <- glmmTMB(Trichoderma ~  pre.crop,
+trich.dna.pcoff <- glmmTMB(Trichoderma ~  mc.pi.sh + (1|block2),
                       data = data.itsgen.dna.t0.s , 
-                      family = nbinom1 (link = "log"),
+                      family = nbinom2 (link = "log"),
                       offset = log(readcount.tot))
 summary(trich.dna.pcoff)
 knitr::kable(summary(trich.dna.pcoff)$coefficients, digits = 4)
@@ -220,202 +323,424 @@ car::Anova (trich.dna.pcoff)
 
 #check model
 test <- simulateResiduals(fittedModel = trich.dna.pcoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(trich.dna.pcoff)
+plotResiduals(test, form = data.itsgen.dna.t0.s$mc.pi.sh)
+testZeroInflation(test)
 
 #EMMEANS
-ref_grid(trich.dna.pcoff)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(trich.dna.pcoff, "pre.crop", type = "response")
+emm.res <- emmeans(trich.dna.pcoff, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
-
-Mortierella
-```{r}
-#chosen model
-mort.dna.pc <- glmmTMB(Mortierella ~  pre.crop,
-                      data = data.itsgen.dna.t0.s , 
-                      family = nbinom1 (link = "log"))
-
-summary(mort.dna.pc)
-knitr::kable(summary(mort.dna.pc)$coefficients, digits = 4)
-car::Anova (mort.dna.pc)
-
-#check model
-test <- simulateResiduals(fittedModel = mort.dna.pcrand, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(mort.dna.pcrand)
-
-#EMMEANS
-ref_grid(mort.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(mort.dna.pc, "pre.crop", type = "response")
-cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
-
-Penicillium
-```{r}
-#chosen model
-pen.dna.pcrand <- glmmTMB(Penicillium ~  pre.crop+(1|block2),
-                      data = data.itsgen.dna.t0.s , 
-                      family = nbinom1 (link = "log"))
-summary(pen.dna.pcrand)
-knitr::kable(summary(pen.dna.pcrand)$coefficients, digits = 4)
-car::Anova (pen.dna.pcrand)
-
-#check model
-test <- simulateResiduals(fittedModel = pen.dna.pcrand, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(pen.dna.pcrand)
-
-#EMMEANS
-ref_grid(pen.dna.pcrand)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(pen.dna.pcrand, "pre.crop", type = "response")
-cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
-
 
 ###########################
 RNA
 
-#check prevalence of genera
-```{r}
-data.itsgen.rna.t0.s$Arthrobotrys #(12/12)
-data.itsgen.rna.t0.s$Dactylella #(NA)
-data.itsgen.rna.t0.s$Dactylellina #(NA)
-data.itsgen.rna.t0.s$Monacrosporium #(NA)
-data.itsgen.rna.t0.s$Orbilia #(NA)
-data.itsgen.rna.t0.s$Lecanicillium #(NA)
-data.itsgen.rna.t0.s$Trichoderma #(10/12)
-data.itsgen.rna.t0.s$Fusarium #(12/12)
-data.itsgen.rna.t0.s$Drechmeria #(NA)
-data.itsgen.rna.t0.s$Haptocillium #(NA)
-data.itsgen.rna.t0.s$Hirsutella #(NA)
-data.itsgen.rna.t0.s$Coprinus #(NA)
-data.itsgen.rna.t0.s$Coprinellus #(1/12)
-data.itsgen.rna.t0.s$Stropharia #(NA)
-data.itsgen.rna.t0.s$Paraglomus #(1/12) 
-data.itsgen.rna.t0.s$Mortierella #(9/12)
-```
-
 Arthrobotrys
 ```{r}
-#chosen model
-arth.rna.pc <- glmmTMB(Arthrobotrys ~  pre.crop,
+arth.rna.pcrand <- glmmTMB(Arthrobotrys ~  mc.pi.sh+(1|block2),
                       data = data.itsgen.rna.t0.s , 
-                      family = nbinom1 (link = "log"))
-summary(arth.rna.pc)
-knitr::kable(summary(arth.rna.pc)$coefficients, digits = 4)
-car::Anova (arth.rna.pcrandoff)
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(arth.rna.pcrand)
+knitr::kable(summary(arth.rna.pcrand)$coefficients, digits = 4)
+car::Anova (arth.rna.pcrand)
 
 #check model
-test <- simulateResiduals(fittedModel = arth.rna.pcrandoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(arth.rna.pcrandoff)
+test <- simulateResiduals(fittedModel = arth.rna.pcrand, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$mc.pi.sh)
+testZeroInflation(test)
 
 #EMMEANS
-ref_grid(arth.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(arth.rna.pcrandoff, "pre.crop", type = "response")
+emm.res <- emmeans(arth.rna.pcrand, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 
 Fusarium
 ```{r}
-#chosen model
-fus.rna.pc <- glmmTMB(Fusarium ~  pre.crop,
+fus.rna.pcrandoff <- glmmTMB(Fusarium ~  mc.pi.sh+(1|block2),
                       data = data.itsgen.rna.t0.s , 
-                      family = nbinom1 (link = "log"))
-summary(fus.rna.pc)
-knitr::kable(summary(fus.rna.pc)$coefficients, digits = 4)
-car::Anova (fus.rna.pc)
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(fus.rna.pcrandoff)
+knitr::kable(summary(fus.rna.pcrandoff)$coefficients, digits = 4)
+car::Anova (fus.rna.pcrandoff)
 
 #check model
-test <- simulateResiduals(fittedModel = fus.rna.pc, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(fus.rna.pc)
+test <- simulateResiduals(fittedModel = fus.rna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$mc.pi.sh)
+testZeroInflation(test)
 
 #EMMEANS
-ref_grid(fus.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(fus.rna.pc, "pre.crop", type = "response")
+emm.res <- emmeans(fus.rna.pcrandoff, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
-Trichoderma
-```{r}
-#chosen model
-trich.rna.pc <- glmmTMB(Trichoderma ~  pre.crop,
-                      data = data.itsgen.rna.t0.s , 
-                      family = nbinom1 (link = "log"))
-summary(trich.rna.pc)
-knitr::kable(summary(trich.rna.pc)$coefficients, digits = 4)
-car::Anova (trich.rna.pc)
-
-#check model
-test <- simulateResiduals(fittedModel = trich.rna.pc, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(trich.rna.pc)
-
-#EMMEANS
-ref_grid(trich.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(trich.rna.pc, "pre.crop", type = "response")
-cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
 
 Mortierella
 ```{r}
-#chosen model
-mort.rna.pcrandoff <- glmmTMB(Mortierella ~  pre.crop+(1|block2),
+mort.rna.pcrandoff <- glmmTMB(Mortierella ~  mc.pi.sh+(1|block2),
                       data = data.itsgen.rna.t0.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
 summary(mort.rna.pcrandoff)
 knitr::kable(summary(mort.rna.pcrandoff)$coefficients, digits = 4)
 car::Anova (mort.rna.pcrandoff)
 
 #check model
-test <- simulateResiduals(fittedModel = mort.rna.pcrand, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(mort.rna.pcrand)
+test <- simulateResiduals(fittedModel = mort.rna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$mc.pi.sh)
+testZeroInflation(test)
 
 #EMMEANS
-ref_grid(mort.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(mort.rna.pcrandoff, "pre.crop", type = "response")
+emm.res <- emmeans(mort.rna.pcrandoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+
+Penicillium
+```{r}
+pen.rna.pcrandoff <- glmmTMB(Penicillium ~  mc.pi.sh+(1|block2),
+                      data = data.itsgen.rna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.rna.pcrandoff)
+knitr::kable(summary(pen.rna.pcrandoff)$coefficients, digits = 4)
+car::Anova (pen.rna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = pen.rna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(pen.rna.pcrandoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Trichoderma
+```{r}
+trich.rna.pcoff <- glmmTMB(Trichoderma ~  mc.pi.sh + (1|block2),
+                      data = data.itsgen.rna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(trich.rna.pcoff)
+knitr::kable(summary(trich.rna.pcoff)$coefficients, digits = 4)
+car::Anova (trich.rna.pcoff)
+
+#check model
+test <- simulateResiduals(fittedModel = trich.rna.pcoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$mc.pi.sh)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(trich.rna.pcoff, "mc.pi.sh", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+
+###########
+#pre.crops
+
+Acremonium
+```{r}
+#test for levels
+acr.dna.pcrand <- glmmTMB(Acremonium ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(acr.dna.pcrand)
+knitr::kable(summary(acr.dna.pcrand)$coefficients, digits = 4)
+car::Anova (acr.dna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = acr.dna.pcrand, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(acr.dna.pcrand, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Arthrobotrys
+```{r}
+arth.dna.pcrand <- glmmTMB(Arthrobotrys ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(arth.dna.pcrand)
+knitr::kable(summary(arth.dna.pcrand)$coefficients, digits = 4)
+car::Anova (arth.dna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = arth.dna.pcrand, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(arth.dna.pcrand, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+
+Fusarium
+```{r}
+fus.dna.pcrandoff <- glmmTMB(Fusarium ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(fus.dna.pcrandoff)
+knitr::kable(summary(fus.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (fus.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = fus.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(fus.dna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Haptocillium
+```{r}
+hapt.dna.pcrandoff <- glmmTMB(Haptocillium ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(hapt.dna.pcrandoff)
+knitr::kable(summary(hapt.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (hapt.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = hapt.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(hapt.dna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Hirsutella
+```{r}
+hirs.dna.pcrandoff <- glmmTMB(Hirsutella ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(hirs.dna.pcrandoff)
+knitr::kable(summary(hirs.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (hirs.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = hirs.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(hirs.dna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Mortierella
+```{r}
+mort.dna.pcrandoff <- glmmTMB(Mortierella ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(mort.dna.pcrandoff)
+knitr::kable(summary(mort.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (mort.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = mort.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(mort.dna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Nematoctonus
+```{r}
+nemat.dna.pcrandoff <- glmmTMB(Nematoctonus ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(nemat.dna.pcrandoff)
+knitr::kable(summary(nemat.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (nemat.dna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = nemat.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(nemat.dna.pcrandoff, "pre.crop", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 Penicillium
 ```{r}
-#chosen model
-pen.rna.pcrand <- glmmTMB(Penicillium ~  pre.crop+(1|block2),
-                      data = data.itsgen.rna.t0.s , 
-                      family = nbinom1 (link = "log"))
-summary(pen.rna.pcrand)
-knitr::kable(summary(pen.rna.pcrand)$coefficients, digits = 4)
-car::Anova (pen.rna.pcrand)
+pen.dna.pcrandoff <- glmmTMB(Penicillium ~  pre.crop+(1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.dna.pcrandoff)
+knitr::kable(summary(pen.dna.pcrandoff)$coefficients, digits = 4)
+car::Anova (pen.dna.pcrandoff)
 
 #check model
-test <- simulateResiduals(fittedModel = pen.rna.pcrand, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(pen.rna.pcrand)
+test <- simulateResiduals(fittedModel = pen.dna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
 
 #EMMEANS
-ref_grid(pen.rna.pcrand)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(pen.rna.pcrand, "pre.crop", type = "response")
+emm.res <- emmeans(pen.dna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Trichoderma
+```{r}
+trich.dna.pcoff <- glmmTMB(Trichoderma ~  pre.crop + (1|block2),
+                      data = data.itsgen.dna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(trich.dna.pcoff)
+knitr::kable(summary(trich.dna.pcoff)$coefficients, digits = 4)
+car::Anova (trich.dna.pcoff)
+
+#check model
+test <- simulateResiduals(fittedModel = trich.dna.pcoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(trich.dna.pcoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+###########################
+RNA
+
+Arthrobotrys
+```{r}
+arth.rna.pcrand <- glmmTMB(Arthrobotrys ~  pre.crop+(1|block2),
+                      data = data.itsgen.rna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(arth.rna.pcrand)
+knitr::kable(summary(arth.rna.pcrand)$coefficients, digits = 4)
+car::Anova (arth.rna.pcrand)
+
+#check model
+test <- simulateResiduals(fittedModel = arth.rna.pcrand, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(arth.rna.pcrand, "pre.crop", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 
+Fusarium
+```{r}
+fus.rna.pcrandoff <- glmmTMB(Fusarium ~  pre.crop+(1|block2),
+                      data = data.itsgen.rna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(fus.rna.pcrandoff)
+knitr::kable(summary(fus.rna.pcrandoff)$coefficients, digits = 4)
+car::Anova (fus.rna.pcrandoff)
 
+#check model
+test <- simulateResiduals(fittedModel = fus.rna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(fus.rna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+
+Mortierella
+```{r}
+mort.rna.pcrandoff <- glmmTMB(Mortierella ~  pre.crop+(1|block2),
+                      data = data.itsgen.rna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(mort.rna.pcrandoff)
+knitr::kable(summary(mort.rna.pcrandoff)$coefficients, digits = 4)
+car::Anova (mort.rna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = mort.rna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(mort.rna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+
+Penicillium
+```{r}
+pen.rna.pcrandoff <- glmmTMB(Penicillium ~  pre.crop+(1|block2),
+                      data = data.itsgen.rna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.rna.pcrandoff)
+knitr::kable(summary(pen.rna.pcrandoff)$coefficients, digits = 4)
+car::Anova (pen.rna.pcrandoff)
+
+#check model
+test <- simulateResiduals(fittedModel = pen.rna.pcrandoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(pen.rna.pcrandoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+Trichoderma
+```{r}
+trich.rna.pcoff <- glmmTMB(Trichoderma ~  pre.crop + (1|block2),
+                      data = data.itsgen.rna.t0.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(trich.rna.pcoff)
+knitr::kable(summary(trich.rna.pcoff)$coefficients, digits = 4)
+car::Anova (trich.rna.pcoff)
+
+#check model
+test <- simulateResiduals(fittedModel = trich.rna.pcoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t0.s$pre.crop)
+testZeroInflation(test)
+
+#EMMEANS
+emm.res <- emmeans(trich.rna.pcoff, "pre.crop", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
 
 ################################################################################################################################################################################################################################################################################
-2. T1
+t1
 
 ```{r}
 load (file = 'ps-selected-only-ITS-filt-lowabd-no-neg-norep.RData')
@@ -425,11 +750,12 @@ ps.ITS.dna.t1@sam_data$readcount.tot <- readcount(ps.ITS.dna.t1)
 ps.ITS.rna.t1@sam_data$readcount.tot <- readcount(ps.ITS.rna.t1)
 
 ant.ITS.dna.t1.gen <- subset_taxa(ps.ITS.dna.t1, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+                                                              "Acremonium",
                                                                       "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
                                                                       "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
                                                                       "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
                                                                       "Mortierella", "Monacrosporium"))
-ant.ITS.rna.t1.gen <- subset_taxa(ps.ITS.rna.t1, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina",
+ant.ITS.rna.t1.gen <- subset_taxa(ps.ITS.rna.t1, Genus %in% c("Orbilia", "Arthrobotrys", "Dactylella", "Dactylellina","Acremonium",
                                                                       "Drechmeria","Haptocillium", "Hirsutella", "Lecanicillium", 
                                                                       "Trichoderma", "Fusarium", "Penicillium", "Nematoctonus", 
                                                                       "Coprinus", "Coprinellus", "Stropharia", "Glomus", "Paraglomus", 
@@ -440,10 +766,10 @@ ant.ITS.dna.t1.gen
 ant.ITS.rna.t1.gen = prune_taxa(taxa_sums(ant.ITS.rna.t1.gen) > 0, ant.ITS.rna.t1.gen)
 ant.ITS.rna.t1.gen
 
-ant.ITS.dna.t1.gen@sam_data$pre.crop <- fct_relevel(ant.ITS.dna.t1.gen@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.ITS.dna.t1.gen@sam_data$mc.pi.sh <- fct_relevel(ant.ITS.dna.t1.gen@sam_data$mc.pi.sh, "bo", "ry", "ir", "er")
 ant.ITS.dna.t1.gen@sam_data$cc <- fct_relevel(ant.ITS.dna.t1.gen@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
                                     
-ant.ITS.rna.t1.gen@sam_data$pre.crop <- fct_relevel(ant.ITS.rna.t1.gen@sam_data$pre.crop, "bo", "ry", "ir", "er")
+ant.ITS.rna.t1.gen@sam_data$mc.pi.sh <- fct_relevel(ant.ITS.rna.t1.gen@sam_data$mc.pi.sh, "bo", "ry", "ir", "er")
 ant.ITS.rna.t1.gen@sam_data$cc <- fct_relevel(ant.ITS.rna.t1.gen@sam_data$cc, "FW", "OSR_T", "OSR_A", "OSR_R","PHA", "VE", "BO","BO.OSR_R", "BO.OSR_T", "PHA.OSR_T", "VE.OSR_T")
 
 #DNA
@@ -455,8 +781,8 @@ tax.itsgen.dna.t1.s <- as.data.frame(tax_table(ant.itsgen.dna.t1.s))
 data.itsgen.dna.t1.s <- merge (samdf.itsgen.dna.t1.s, otu.itsgen.dna.t1.s,  by = 'row.names')
 colnames(data.itsgen.dna.t1.s)
 
-data.itsgen.dna.t1.s$pre.crop <- as.factor(data.itsgen.dna.t1.s$pre.crop)
-data.itsgen.dna.t1.s$pre.crop <- fct_relevel(data.itsgen.dna.t1.s$pre.crop, "er", "ir", "ry", "bo")
+data.itsgen.dna.t1.s$mc.pi.sh <- as.factor(data.itsgen.dna.t1.s$mc.pi.sh)
+data.itsgen.dna.t1.s$mc.pi.sh <- fct_relevel(data.itsgen.dna.t1.s$mc.pi.sh, "Low", "Medium", "High")
 
 ITS.antagonists.T1.dna <- colnames(otu.itsgen.dna.t1.s)
 #add readcount
@@ -474,410 +800,732 @@ colnames(data.itsgen.rna.t1.s)
 ITS.antagonists.T1.rna <- colnames(otu.itsgen.rna.t1.s)
  
 colnames(data.itsgen.rna.t1.s)
-data.itsgen.rna.t1.s$pre.crop <- as.factor(data.itsgen.rna.t1.s$pre.crop)
-data.itsgen.rna.t1.s$pre.crop <- fct_relevel(data.itsgen.rna.t1.s$pre.crop, "er", "ir", "ry", "bo")
+data.itsgen.rna.t1.s$mc.pi.sh <- as.factor(data.itsgen.rna.t1.s$mc.pi.sh)
+data.itsgen.rna.t1.s$mc.pi.sh <- fct_relevel(data.itsgen.rna.t1.s$mc.pi.sh, "Low", "Medium", "High")
 #add readcount
 data.itsgen.rna.t1.s$readcount <- rowSums(otu.itsgen.rna.t1.s[1:15])
 ```
 
 
-#plots -not used in paper
+
 ```{r}
-data.itsgen.dna.t1.s.long <- data.itsgen.dna.t1.s %>%
-  dplyr::select(cc, pre.crop, readcount.tot, Arthrobotrys, Fusarium, Mortierella,Trichoderma) %>% 
-  tidyr::pivot_longer(cols = Arthrobotrys:Trichoderma, 
-               names_to = "Genus", 
-               values_to = "Abundance") %>% 
-              mutate (Rel.abundance.DNA = (Abundance/readcount.tot)) 
-data.itsgen.dna.t1.s.long$pre.crop <- forcats::fct_relevel(data.itsgen.dna.t1.s.long$pre.crop, "bo", "ry", "ir", "er" )
-  
-data.itsgen.rna.t1.s.long <- data.itsgen.rna.t1.s %>% 
-  dplyr::select(cc, pre.crop,readcount.tot,Arthrobotrys, Fusarium, Mortierella,Trichoderma) %>% 
-  tidyr::pivot_longer(cols = Arthrobotrys:Trichoderma, 
-               names_to = "Genus", 
-               values_to = "Abundance") %>% 
-  mutate (Rel.abundance.RNA = (Abundance/readcount.tot)) 
-data.itsgen.rna.t1.s.long$pre.crop <- forcats::fct_relevel(data.itsgen.rna.t1.s.long$pre.crop, "bo", "ry", "ir", "er" )
-
-#horizontal plots
-colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
-
-plot.ant.its.dna.t1h<- data.itsgen.dna.t1.s.long %>%  
-                        ggplot (mapping = aes(y=Rel.abundance.DNA, x =cc, fill = cc))+
-                        geom_boxplot(orientation = "x", fatten = 1)+
-                        #geom_point(alpha = 0.5)+
-                        scale_y_continuous(limits = c(0,0.10), labels = scales::percent)+
-                        scale_fill_manual(values = colorCode2)+
-                        labs(title = "Relative abundance of antagonistic fungal genera in DNA", y = "Relative abundance")+
-                        facet_wrap(vars(Genus), scales = "fixed", strip.position = "top", nrow = 1)+
-   theme_classic()+
-  theme(axis.line.y.left = (element_blank()), 
-        axis.text.x = (element_text(angle = 90, size = 8, hjust = 1)),
-        strip.text.x = element_text(size = 8))
-plot.ant.its.dna.t1h
-
-plot.ant.its.rna.t1h<- data.itsgen.rna.t1.s.long %>%  
-                        ggplot (mapping = aes(y=Rel.abundance.RNA, x =cc, fill = cc))+
-                        geom_boxplot(orientation = "x", fatten = 1)+
-                        #geom_point(alpha = 0.5)+
-                        scale_y_continuous(limits = c(0,0.10), labels = scales::percent)+
-                        #scale_color_manual(values = colorCode2)+
-                        scale_fill_manual(values = colorCode2)+
-                        labs(title = "Relative abundance of antagonistic fungal genera in RNA", y = "Relative abundance ")+
-                        facet_wrap(vars(Genus), scales = "fixed", strip.position = "top", nrow = 1)+
-   theme_classic()+
-  theme(axis.line.y.left = (element_blank()), 
-        axis.text.x = (element_text(angle = 90, size = 8, hjust = 1)),
-        strip.text.x = element_text(size = 8))
-plot.ant.its.rna.t1h
-
-```
-DNA
-
-Check prevalence
-```{r}
+#DNA
+colnames(data.itsgen.dna.t1.s)
+length(which(data.itsgen.dna.t1.s$Penicillium > 0))#(130/130)
 length(which(data.itsgen.dna.t1.s$Arthrobotrys > 0))#(126/130)
 length(which(data.itsgen.dna.t1.s$Dactylella> 0)) #(1/130)
 length(which(data.itsgen.dna.t1.s$Monacrosporium> 0)) #(18/130)
 length(which(data.itsgen.dna.t1.s$Orbilia > 0))#(3/130)
 length(which(data.itsgen.dna.t1.s$Trichoderma > 0))#(124/130)
-length(which(data.itsgen.dna.t1.s$Fusarium> 0)) #(130/130)
-length(which(data.itsgen.dna.t1.s$Drechmeria > 0))#(1/130)
+length(which(data.itsgen.dna.t1.s$Acremonium> 0)) #(55/130)
+length(which(data.itsgen.dna.t1.s$Fusarium > 0))#(130/130)
+length(which(data.itsgen.dna.t1.s$Drechmeria > 0))#(0/130)
 length(which(data.itsgen.dna.t1.s$Haptocillium > 0))#(30/130)
 length(which(data.itsgen.dna.t1.s$Hirsutella> 0)) #(46/130)
 length(which(data.itsgen.dna.t1.s$Coprinus> 0)) #(1/130)
+length(which(data.itsgen.dna.t1.s$Nematoctonus > 0))#(34/130)
 length(which(data.itsgen.dna.t1.s$Coprinellus > 0))#(16/130)
 length(which(data.itsgen.dna.t1.s$Mortierella > 0))#(116/130)
-length(which(data.itsgen.dna.t1.s$Penicillium > 0))#(130/130)
-length(which(data.itsgen.dna.t1.s$Nematoctonus > 0))#(34/130)
+
+#RNA
+length(which(data.itsgen.rna.t1.s$Penicillium > 0))#(44/130)
+length(which(data.itsgen.rna.t1.s$Arthrobotrys > 0))#(112/130)
+length(which(data.itsgen.rna.t1.s$Dactylella> 0)) #(3/130)
+length(which(data.itsgen.rna.t1.s$Monacrosporium> 0)) #(11/130)
+length(which(data.itsgen.rna.t1.s$Orbilia > 0))#(2/130)
+length(which(data.itsgen.rna.t1.s$Trichoderma > 0))#(85/130)
+length(which(data.itsgen.rna.t1.s$Acremonium> 0)) #(13/130)
+length(which(data.itsgen.rna.t1.s$Fusarium > 0))#(106/130)
+length(which(data.itsgen.rna.t1.s$Haptocillium > 0))#(1/130)
+length(which(data.itsgen.rna.t1.s$Hirsutella> 0)) #(3/130)
+length(which(data.itsgen.rna.t1.s$Coprinus> 0)) #(1/130)
+length(which(data.itsgen.rna.t1.s$Nematoctonus > 0))#(6/130)
+length(which(data.itsgen.rna.t1.s$Coprinellus > 0))#(3/130)
+length(which(data.itsgen.rna.t1.s$Stropharia > 0))#(1/130)
+length(which(data.itsgen.rna.t1.s$Paraglomus > 0))#(5/130)
+length(which(data.itsgen.rna.t1.s$Mortierella > 0))#(93/130)
+length(which(data.itsgen.rna.t1.s$Paraglomus > 0))#(5/130)
+```
+
+#mc levels
+
+Acremonium
+```{r}
+#test for levels
+acr.dna.cc.rnad <- glmmTMB(Acremonium ~  cc + (1|mc.pi.sh)+ (1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot), dispformula = ~1)
+summary(acr.dna.cc.rnad)
+knitr::kable(summary(acr.dna.cc.rnad)$coefficients, digits = 4)
+car::Anova (acr.dna.cc.rnad)
+#check model
+test <- simulateResiduals(fittedModel = acr.dna.cc.rnad, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
+testZeroInflation(test)
+
+##INTERACTION
+acr.dna.int <- glmmTMB(Acremonium ~  mc.pi.sh * cc+ (1|block2) ,
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+
+summary(acr.dna.int) #NO
+
+#ON MELO LEVELS
+acr.dna.mc <- glmmTMB(Acremonium ~  mc.pi.sh + (1|cc)+ (1|block2) ,
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+
+summary(acr.dna.mc)
+car::Anova (acr.dna.mc)
+test <- simulateResiduals(fittedModel = acr.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
+testZeroInflation(test)
 ```
 
 Arthrobotrys
 ```{r}
-#chosen model
-arth.dna.ccoff <- glmmTMB(Arthrobotrys ~  cc,
+arth.dna.cc.rnad <- glmmTMB(Arthrobotrys ~  cc + (1|mc.pi.sh) + (1|block2),
                       data = data.itsgen.dna.t1.s , 
-                      family = nbinom1 (link = "log"),
+                      family = nbinom2 (link = "log"),
                       offset = log(readcount.tot))
-test <- simulateResiduals(fittedModel = arth.dna.ccoff, plot = T)#no fit
-car::Anova(arth.dna.ccoff)
-summary(arth.dna.ccoff)
-knitr::kable(summary(arth.dna.ccoff)$coefficients, digits = 4)
+summary(arth.dna.cc.rnad)
+knitr::kable(summary(arth.dna.cc.rnad)$coefficients, digits = 4)
+car::Anova (arth.dna.cc.rnad)
 
 #check model
-test <- simulateResiduals(fittedModel = arth.dna.ccoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(arth.dna.ccoff)
+test <- simulateResiduals(fittedModel = arth.dna.cc.rnad, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
 testZeroInflation(test)
-
 #EMMEANS
-ref_grid(arth.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(arth.dna.ccoff, "cc", type = "response")
+emm.res <- emmeans(arth.dna.cc.rnad, "cc", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
 
-Trichoderma
-```{r}
-#chosen model
-trich.dna.ccrandoff <- glmmTMB(Trichoderma ~  cc+(1|block2),
+###ON MELO LEVELS
+arth.dna.mc <- glmmTMB(Arthrobotrys ~  mc.pi.sh + (1|cc) + (1| block2),
                       data = data.itsgen.dna.t1.s , 
-                      family = nbinom1 (link = "log"),
+                      family = nbinom2 (link = "log"),
                       offset = log(readcount.tot))
-car::Anova(trich.dna.ccrandoff)
-summary(trich.dna.ccrandoff)
-
+summary(arth.dna.mc)
+knitr::kable(summary(arth.dna.mc)$coefficients, digits = 4)
+car::Anova (arth.dna.mc)
 #check model
-test <- simulateResiduals(fittedModel = trich.dna.ccrandoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(trich.dna.ccrandoff)
+test <- simulateResiduals(fittedModel = arth.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
 testZeroInflation(test)
-
 #EMMEANS
-ref_grid(trich.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(trich.dna.ccrandoff, "cc", type = "response")
+emm.res <- emmeans(arth.dna.mc, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
 
-Penicillium
-```{r}
-#chosen model
-pen.dna.ccoff <- glmmTMB(Penicillium ~  cc,
+##INTERACTION
+arth.dna.int <- glmmTMB(Arthrobotrys ~  mc.pi.sh*cc + (1| block2),
                       data = data.itsgen.dna.t1.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
-car::Anova(pen.dna.ccoff)
-knitr::kable(summary(pen.dna.ccoff)$coefficients, digits = 4)
-summary(pen.dna.ccoff)
-
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(arth.dna.int)
+knitr::kable(summary(arth.dna.int)$coefficients, digits = 4)
+car::Anova (arth.dna.int)
 #check model
-test <- simulateResiduals(fittedModel = pen.dna.ccoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(pen.dna.ccoff)
+test <- simulateResiduals(fittedModel = arth.dna.int, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
 testZeroInflation(test)
-
 #EMMEANS
-ref_grid(pen.dna.ccoff)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(pen.dna.ccrandoff, "cc", type = "response")
+emm.res <- emmeans(arth.dna.int, pairwise ~ cc | mc.pi.sh, type = "response" )
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
 ```
+
 
 Fusarium
 ```{r}
-#chosen model
-fus.dna.ccrandoff <- glmmTMB(Fusarium~  cc+(1|block2),
+fus.dna.ccr.randoff <- glmmTMB(Fusarium ~  cc + (1|mc.pi.sh) + (1|block2),
                       data = data.itsgen.dna.t1.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
-car::Anova(fus.dna.ccrandoff)
-summary(fus.dna.ccrandoff)
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(fus.dna.ccr.randoff)
+knitr::kable(summary(fus.dna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (fus.dna.ccr.randoff)
 
 #check model
-test <- simulateResiduals(fittedModel = fus.dna.ccrandoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(fus.dna.ccrandoff)
+test <- simulateResiduals(fittedModel = fus.dna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
 testZeroInflation(test)
 
 #EMMEANS
-ref_grid(fus.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(fus.dna.ccrandoff, "cc", type = "response")
+emm.res <- emmeans(fus.dna.ccr.randoff, "cc", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
 
-Mortierella
-```{r}
-#chosen model
-mort.dna.ccoff <- glmmTMB(Mortierella~  cc,
+##INTERACTION
+fus.dna.int <- glmmTMB(Fusarium ~  mc.pi.sh*cc + (1| block2),
                       data = data.itsgen.dna.t1.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
-car::Anova(mort.dna.ccoff)
-summary(mort.dna.ccoff)
-knitr::kable(summary(mort.dna.ccoff)$coefficients, digits = 4)
-
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(fus.dna.int)
+knitr::kable(summary(fus.dna.int)$coefficients, digits = 4)
+car::Anova (fus.dna.int)
 #check model
-test <- simulateResiduals(fittedModel = mort.dna.ccoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(mort.dna.ccoff)
+test <- simulateResiduals(fittedModel = fus.dna.int, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
 testZeroInflation(test)
-
 #EMMEANS
-ref_grid(mort.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(mort.dna.ccoff, "cc", type = "response")
+emm.res <- emmeans(fus.dna.int, pairwise ~ cc | mc.pi.sh, type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
 
-Hirsutella
-```{r}
-#chosen model
-hirst.dna.ccrand <- glmmTMB(Hirsutella~  cc+(1|pre.crop),
+#MC LEVELS
+fus.dna.mc <- glmmTMB(Fusarium ~  mc.pi.sh + (1|cc) + (1| block2),
                       data = data.itsgen.dna.t1.s , 
-                      family = nbinom1 (link = "log"))
-car::Anova(hirst.dna.ccrand) #no sign
-summary(hirst.dna.ccrand)
-
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(fus.dna.mc)
+knitr::kable(summary(fus.dna.mc)$coefficients, digits = 4)
+car::Anova (fus.dna.mc)
 #check model
-test <- simulateResiduals(fittedModel = hirst.dna.ccrand, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(hirst.dna.ccrand)
+test <- simulateResiduals(fittedModel = fus.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
 testZeroInflation(test)
-
 #EMMEANS
-ref_grid(hirst.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(hirst.dna.ccrand, "cc", type = "response")
+emm.res <- emmeans(fus.dna.mc, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 Haptocillium
 ```{r}
-#chosen model
-hapt.dna.ccrandblpc <- glmmTMB(Haptocillium~  cc+(1|pre.crop)+(1|block2),
+hapt.dna.ccr.randoff <- glmmTMB(Haptocillium ~  cc + (1|mc.pi.sh)+(1|block2),
                       data = data.itsgen.dna.t1.s , 
-                      family = nbinom1 (link = "log"))
-test <- simulateResiduals(fittedModel = hapt.dna.ccrandblpc, plot = T)#fits
-testZeroInflation(test)
-car::Anova(hapt.dna.ccrandblpc)#no sign
-summary(hapt.dna.ccrandblpc)
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(hapt.dna.ccr.randoff)
+knitr::kable(summary(hapt.dna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (hapt.dna.ccr.randoff)
 
 #check model
-test <- simulateResiduals(fittedModel = hapt.dna.ccrandblpc, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(hapt.dna.ccrandblpc)
+test <- simulateResiduals(fittedModel = hapt.dna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
 testZeroInflation(test)
 
 #EMMEANS
-ref_grid(hapt.dna.pc)
-#emm.off<-emmeans(var.dna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(hapt.dna.ccrandblpc, "cc", type = "response")
+emm.res <- emmeans(hapt.dna.ccr.randoff, "cc", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
 
+##interaction effect?
+hapt.dna.int <- glmmTMB(Haptocillium ~  mc.pi.sh*cc + (1| block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(hapt.dna.int) #no work
 
-######################################################################################################################################
-RNA
-
-Check prevalence
-```{r}
-length(which(data.itsgen.rna.t1.s$Arthrobotrys > 0))#(112/129)
-length(which(data.itsgen.rna.t1.s$Dactylella> 0)) #(3/129)
-length(which(data.itsgen.rna.t1.s$Monacrosporium> 0)) #(11/129)
-length(which(data.itsgen.rna.t1.s$Orbilia > 0))#(2/129)
-length(which(data.itsgen.rna.t1.s$Trichoderma > 0))#(85/129)
-length(which(data.itsgen.rna.t1.s$Fusarium> 0)) #(106/129)
-length(which(data.itsgen.rna.t1.s$Haptocillium > 0))#(1/129)
-length(which(data.itsgen.rna.t1.s$Hirsutella> 0)) #(3/129)
-length(which(data.itsgen.rna.t1.s$Coprinus> 0)) #(1/129)
-length(which(data.itsgen.rna.t1.s$Coprinellus > 0))#(3/129)
-length(which(data.itsgen.rna.t1.s$Stropharia > 0))#(1/129)
-length(which(data.itsgen.rna.t1.s$Paraglomus> 0)) #(1/129) 
-length(which(data.itsgen.rna.t1.s$Mortierella > 0))#(93/129)
-length(which(data.itsgen.rna.t1.s$Penicillium > 0))#(44/130)
-length(which(data.itsgen.rna.t1.s$Nematoctonus > 0))#(6/130)
-```
-
-
-Arthrobotrys
-```{r}
-#chosen model
-arth.rna.ccpcoff <- glmmTMB(Arthrobotrys ~  cc+(1|pre.crop),
-                      data = data.itsgen.rna.t1.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
-test <- simulateResiduals(fittedModel = arth.rna.ccpcoff, plot = T)#no fit
-car::Anova(arth.rna.ccpcoff)
-summary(arth.rna.ccpcoff)
+#initial levels effect
+hapt.dna.mc <- glmmTMB(Haptocillium ~  mc.pi.sh + (1|cc) + (1| block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(hapt.dna.mc)
+knitr::kable(summary(hapt.dna.mc)$coefficients, digits = 4)
+car::Anova (hapt.dna.mc)
 
 #check model
-test <- simulateResiduals(fittedModel = arth.rna.ccoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(arth.rna.ccoff)
+test <- simulateResiduals(fittedModel = fus.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
 testZeroInflation(test)
 
 #EMMEANS
-ref_grid(arth.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(arth.rna.ccpcoff, "cc", type = "response")
-cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-
-Only pre-crop is isgnificant : 
-arth.rna.pc <- glmmTMB(Arthrobotrys ~  pre.crop,
-                      data = data.itsgen.rna.t1.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
-
-summary(arth.rna.pc)
-car::Anova (arth.rna.pc)
-emm.res <- emmeans(arth.rna.pc, "pre.crop", type = "response")
+emm.res <- emmeans(hapt.dna.mc, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
-Trichoderma
+Hirsutella
 ```{r}
-#chosen model
-trich.rna.ccoff <- glmmTMB(Trichoderma ~  cc,
-                      data = data.itsgen.rna.t1.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
-car::Anova(trich.rna.ccoff)
-summary(trich.rna.ccoff)
-
-#check model
-test <- simulateResiduals(fittedModel = trich.rna.ccoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(trich.rna.ccoff)
+hirs.dna.ccr.randoff <- glmmTMB(Hirsutella ~  cc + (1|mc.pi.sh)+(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(hirs.dna.ccr.randoff)
+knitr::kable(summary(hirs.dna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (hirs.dna.ccr.randoff)
+test <- simulateResiduals(fittedModel = hirs.dna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
 testZeroInflation(test)
-
-#EMMEANS
-ref_grid(trich.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(trich.rna.ccoff, "cc", type = "response")
+emm.res <- emmeans(hirs.dna.ccr.randoff, "cc", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
-```
 
-Fusarium
-```{r}
-#chosen model
-fus.rna.ccpcbloff <- glmmTMB(Fusarium~  cc+(1|pre.crop)+(1|block2),
-                      data = data.itsgen.rna.t1.s , 
-                      family = nbinom1 (link = "log"),
+##INTERACTION
+hirs.dna.int <- glmmTMB(Hirsutella ~  mc.pi.sh * cc + (1| block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
                       offset = log(readcount.tot))
-test <- simulateResiduals(fittedModel = fus.rna.ccpcbloff, plot = T)#no fit
-testZeroInflation(test)
-car::Anova(fus.rna.ccpcbloff)
-summary(fus.rna.ccpcbloff)
+summary(hirs.dna.int) #no work
+
+#MC LEVELS
+hirs.dna.mc <- glmmTMB(Hirsutella ~  mc.pi.sh + (1|cc) + (1| block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(hirs.dna.mc)
+knitr::kable(summary(hirs.dna.mc)$coefficients, digits = 4)
+car::Anova (hirs.dna.mc)
 
 #check model
-test <- simulateResiduals(fittedModel = fus.rna.ccpcbloff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(fus.rna.ccpcbloff)
+test <- simulateResiduals(fittedModel = hirs.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
 testZeroInflation(test)
 
 #EMMEANS
-ref_grid(fus.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(fus.rna.ccpcbloff, "cc", type = "response")
+emm.res <- emmeans(hirs.dna.mc, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 Mortierella
 ```{r}
-#chosen model
-mort.rna.ccoffzi <- glmmTMB(Mortierella~  cc,
-                      data = data.itsgen.rna.t1.s , 
-                      family = nbinom1 (link = "log"),
+mort.dna.ccr.randoff <- glmmTMB(Mortierella ~  cc + (1|mc.pi.sh)+(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
                       offset = log(readcount.tot),
+                      dispformula = ~1,
                       ziformula = ~1)
-test <- simulateResiduals(fittedModel = mort.rna.ccoffzi, plot = T)#no fit but best model
-car::Anova(mort.rna.ccoffzi)
-summary(mort.rna.ccoffzi)
-knitr::kable(summary(mort.rna.ccoffzi)$coefficients, digits = 4)
-
+summary(mort.dna.ccr.randoff)
+knitr::kable(summary(mort.dna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (mort.dna.ccr.randoff)
 
 #check model
-test <- simulateResiduals(fittedModel = mort.rna.ccoffzi, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(mort.rna.ccoffzi)
-testZeroInflation(test)
+test <- simulateResiduals(fittedModel = mort.dna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
 
 #EMMEANS
-ref_grid(mort.rna.pc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(mort.rna.ccoffzi, "cc", type = "response")
+emm.res <- emmeans(mort.dna.ccr.randoff, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#INTERACTION
+mort.dna.int <- glmmTMB(Mortierella ~  cc * mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1, ziformula = ~1)
+summary(mort.dna.int)
+knitr::kable(summary(mort.dna.int)$coefficients, digits = 4)
+car::Anova (mort.dna.int)
+test <- simulateResiduals(fittedModel = mort.dna.int, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
+testZeroInflation(test)
+
+#On MC levels
+mort.dna.mc <- glmmTMB(Mortierella ~   mc.pi.sh+ (1| cc) + (1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(mort.dna.mc)
+knitr::kable(summary(mort.dna.mc)$coefficients, digits = 4)
+car::Anova (mort.dna.mc)
+```
+
+Nematoctonus
+```{r}
+nemat.dna.ccr.randoff <- glmmTMB(Nematoctonus ~  cc + (1|mc.pi.sh) +(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(nemat.dna.ccr.randoff)
+knitr::kable(summary(nemat.dna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (nemat.dna.ccr.randoff)
+#check model
+test <- simulateResiduals(fittedModel = nemat.dna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(nemat.dna.ccr.randoff, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#INTERACTION
+nemat.dna.int <- glmmTMB(Nematoctonus ~  cc * mc.pi.sh +(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(nemat.dna.int) #no
+
+#MC LEVELS
+nemat.dna.mc <- glmmTMB(Nematoctonus ~  mc.pi.sh + (1|cc)+(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(nemat.dna.mc)
+knitr::kable(summary(v)$coefficients, digits = 4)
+car::Anova (nemat.dna.mc)
+#check model
+test <- simulateResiduals(fittedModel = nemat.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+```
+
+Penicillium
+```{r}
+pen.dna.ccr.randoff <- glmmTMB(Penicillium ~  cc + (1|mc.pi.sh)+(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.dna.ccr.randoff)
+knitr::kable(summary(pen.dna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (pen.dna.ccr.randoff)
+#check model
+test <- simulateResiduals(fittedModel = pen.dna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(pen.dna.ccr.randoff, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#INTERACTION
+pen.dna.int <- glmmTMB(Penicillium ~  cc * mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.dna.int)
+knitr::kable(summary(pen.dna.int)$coefficients, digits = 4)
+car::Anova (pen.dna.int)
+#check model
+test <- simulateResiduals(fittedModel = pen.dna.int, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
+testZeroInflation(test)
+
+#MC LEVELS
+pen.dna.mc <- glmmTMB(Penicillium ~   mc.pi.sh+ (1|cc) + (1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.dna.mc)
+knitr::kable(summary(pen.dna.mc)$coefficients, digits = 4)
+car::Anova (pen.dna.mc)
+#check model
+test <- simulateResiduals(fittedModel = pen.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+
+```
+
+Trichoderma
+```{r}
+trich.dna.pcoff <- glmmTMB(Trichoderma ~  cc + (1|mc.pi.sh) + (1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(trich.dna.pcoff)
+knitr::kable(summary(trich.dna.pcoff)$coefficients, digits = 4)
+car::Anova (trich.dna.pcoff)
+#check model
+test <- simulateResiduals(fittedModel = trich.dna.pcoff, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(trich.dna.pcoff, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#INTERACTION
+trich.dna.int <- glmmTMB(Trichoderma ~  cc * mc.pi.sh+(1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(trich.dna.int)
+knitr::kable(summary(trich.dna.int)$coefficients, digits = 4)
+car::Anova (trich.dna.int)
+#check model
+test <- simulateResiduals(fittedModel = trich.dna.int, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$cc)
+testZeroInflation(test)
+
+#MC LEVELS
+trich.dna.mc <- glmmTMB(Trichoderma ~   mc.pi.sh+ (1|cc) + (1|block2),
+                      data = data.itsgen.dna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(trich.dna.mc)
+knitr::kable(summary(trich.dna.mc)$coefficients, digits = 4)
+car::Anova (trich.dna.mc)
+#check model
+test <- simulateResiduals(fittedModel = trich.dna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.dna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+```
+
+###########################
+RNA
+
+Arthrobotrys
+```{r}
+arth.rna.cc.rnad <- glmmTMB(Arthrobotrys ~  cc + (1|mc.pi.sh) + (1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(arth.rna.cc.rnad)
+knitr::kable(summary(arth.rna.cc.rnad)$coefficients, digits = 4)
+car::Anova (arth.rna.cc.rnad)
+#check model
+test <- simulateResiduals(fittedModel = arth.rna.cc.rnad, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(arth.rna.cc.rnad, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+###MELO LEVELS
+arth.rna.mc <- glmmTMB(Arthrobotrys ~  mc.pi.sh + (1|cc) + (1| block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(arth.rna.mc)
+knitr::kable(summary(arth.rna.mc)$coefficients, digits = 4)
+car::Anova (arth.rna.mc)
+#check model
+test <- simulateResiduals(fittedModel = arth.rna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+
+##INTERACTION
+arth.rna.int <- glmmTMB(Arthrobotrys ~  mc.pi.sh*cc + (1| block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot))
+summary(arth.rna.int)
+knitr::kable(summary(arth.rna.int)$coefficients, digits = 4)
+car::Anova (arth.rna.int)
+#check model
+test <- simulateResiduals(fittedModel = arth.rna.int, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$mc.pi.sh)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(arth.rna.int, pairwise ~ cc | mc.pi.sh, type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+```
+
+
+Fusarium
+```{r}
+fus.rna.ccr.randoff <- glmmTMB(Fusarium ~  cc + (1|mc.pi.sh) + (1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(fus.rna.ccr.randoff)
+knitr::kable(summary(fus.rna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (fus.rna.ccr.randoff)
+
+#check model
+test <- simulateResiduals(fittedModel = fus.rna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+
+##INTERACTION
+fus.rna.int <- glmmTMB(Fusarium ~  mc.pi.sh*cc + (1| block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(fus.rna.int)
+knitr::kable(summary(fus.rna.int)$coefficients, digits = 4)
+car::Anova (fus.rna.int)
+#check model
+test <- simulateResiduals(fittedModel = fus.rna.int, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$mc.pi.sh)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(fus.rna.int, pairwise ~ cc | mc.pi.sh, type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#ON MC LEVELS
+fus.rna.mc <- glmmTMB(Fusarium ~  mc.pi.sh + (1|cc) + (1| block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      ziformula = ~1)
+summary(fus.rna.mc)
+knitr::kable(summary(fus.rna.mc)$coefficients, digits = 4)
+car::Anova (fus.rna.mc)
+#check model
+test <- simulateResiduals(fittedModel = fus.rna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+```
+
+Mortierella
+```{r}
+mort.rna.ccr.randoff <- glmmTMB(Mortierella ~  cc + (1|mc.pi.sh)+(1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(mort.rna.ccr.randoff)
+knitr::kable(summary(mort.rna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (mort.rna.ccr.randoff)
+#check model
+test <- simulateResiduals(fittedModel = mort.rna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(mort.rna.ccr.randoff, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#INTERACTION
+mort.rna.int <- glmmTMB(Mortierella ~  cc * mc.pi.sh+(1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1, ziformula = ~1)
+summary(mort.rna.int)
+knitr::kable(summary(mort.rna.int)$coefficients, digits = 4)
+car::Anova (mort.rna.int)
+test <- simulateResiduals(fittedModel = mort.rna.int, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+
+#On MC levels
+mort.rna.mc <- glmmTMB(Mortierella ~   mc.pi.sh+ (1| cc) + (1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1, 
+                      ziformula = ~1)
+summary(mort.rna.mc)
+knitr::kable(summary(mort.rna.mc)$coefficients, digits = 4)
+car::Anova (mort.rna.mc)
+test <- simulateResiduals(fittedModel = mort.rna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+plotResiduals(test, form = data.itsgen.rna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(mort.rna.mc, "mc.pi.sh", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
 ```
 
 
 Penicillium
 ```{r}
-#chosen model
-pen.rna.ccoff <- glmmTMB(Penicillium ~  cc,
+pen.rna.ccr.randoff <- glmmTMB(Penicillium ~  cc + (1|mc.pi.sh)+(1|block2),
                       data = data.itsgen.rna.t1.s , 
-                      family = nbinom1 (link = "log"),
-                      offset = log(readcount.tot))
-
-test <- simulateResiduals(fittedModel = pen.rna.ccoff, plot = T)#no fit
-car::Anova(pen.rna.ccoff)
-knitr::kable(summary(pen.rna.ccoff)$coefficients, digits = 4)
-summary(pen.rna.ccoff)
-
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1, 
+                      ziformula = ~1)
+summary(pen.rna.ccr.randoff)
+knitr::kable(summary(pen.rna.ccr.randoff)$coefficients, digits = 4)
+car::Anova (pen.rna.ccr.randoff)
 #check model
-test <- simulateResiduals(fittedModel = pen.rna.ccoff, plot = T)
-testResiduals(test, plot = T)
-test_dispersion <- testDispersion(pen.rna.ccoff)
+test <- simulateResiduals(fittedModel = pen.rna.ccr.randoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
 testZeroInflation(test)
-
 #EMMEANS
-ref_grid(pen.rna.cc)
-#emm.off<-emmeans(var.rna.ccrandoffzi, "cc", type = "response") #lp for log values
-emm.res <- emmeans(pen.rna.ccoff, "cc", type = "response")
+emm.res <- emmeans(pen.rna.ccr.randoff, "cc", type = "response")
 cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#INTERACTION
+pen.rna.int <- glmmTMB(Penicillium ~  cc * mc.pi.sh+(1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(pen.rna.int) #no
+
+#MC LEVELS
+pen.rna.mc <- glmmTMB(Penicillium ~   mc.pi.sh+ (1|cc) + (1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1)
+summary(pen.rna.mc)
+knitr::kable(summary(pen.rna.mc)$coefficients, digits = 4)
+car::Anova (pen.rna.mc)
+#check model
+test <- simulateResiduals(fittedModel = pen.rna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$mc.pi.sh)
+testZeroInflation(test)
 ```
 
+Trichoderma
+```{r}
+trich.rna.pcoff <- glmmTMB(Trichoderma ~  cc + (1|mc.pi.sh) + (1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(trich.rna.pcoff)
+knitr::kable(summary(trich.rna.pcoff)$coefficients, digits = 4)
+car::Anova (trich.rna.pcoff)
+#check model
+test <- simulateResiduals(fittedModel = trich.rna.pcoff, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(trich.rna.pcoff, "cc", type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+#INTERACTION
+trich.rna.int <- glmmTMB(Trichoderma ~  cc * mc.pi.sh+(1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(trich.rna.int)
+knitr::kable(summary(trich.rna.int)$coefficients, digits = 4)
+car::Anova (trich.rna.int)
+#check model
+test <- simulateResiduals(fittedModel = trich.rna.int, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$cc)
+testZeroInflation(test)
+#EMMEANS
+emm.res <- emmeans(trich.rna.int, pairwise ~ cc | mc.pi.sh, type = "response")
+cld(emm.res, Letters = letters, adjust = "BH", alpha = 0.05, decreasing = TRUE)
+
+
+#MC LEVELS
+trich.rna.mc <- glmmTMB(Trichoderma ~   mc.pi.sh+ (1|cc) + (1|block2),
+                      data = data.itsgen.rna.t1.s , 
+                      family = nbinom2 (link = "log"),
+                      offset = log(readcount.tot),
+                      dispformula = ~1,
+                      ziformula = ~1)
+summary(trich.rna.mc)
+knitr::kable(summary(trich.rna.mc)$coefficients, digits = 4)
+car::Anova (trich.rna.mc)
+#check model
+test <- simulateResiduals(fittedModel = trich.rna.mc, plot = T)
+plotResiduals(test, form = data.itsgen.rna.t1.s$mc.pi.sh)
+testZeroInflation(test)
+```
+
+######################################################################################################################
 
 #plots only most abundance
 ```{r}
@@ -886,7 +1534,7 @@ data.itsgen.dna.t1.s.long <- data.itsgen.dna.t1.s %>%
                names_to = "Genus", 
                values_to = "Abundance") %>% 
               mutate (Rel.abundance.DNA = 100*(Abundance/readcount.tot), keep = "all") 
-data.itsgen.dna.t1.s.long$pre.crop <- fct_relevel(data.itsgen.dna.t1.s.long$pre.crop, "bo", "ry", "ir", "er" )
+data.itsgen.dna.t1.s.long$mc.pi.sh <- fct_relevel(data.itsgen.dna.t1.s.long$mc.pi.sh, "bo", "ry", "ir", "er" )
   
 plot.ant.its.dna.t1<- data.itsgen.dna.t1.s.long %>%  
                         ggplot (mapping = aes(x=cc, y = Rel.abundance.DNA))+
@@ -903,7 +1551,7 @@ data.itsgen.rna.t1.s.long <- data.itsgen.rna.t1.s %>%
                values_to = "Abundance") %>% 
   mutate (Rel.abundance.RNA = 100*(Abundance/readcount.tot), keep = "all") 
 
-data.itsgen.rna.t1.s.long$pre.crop <- fct_relevel(data.itsgen.rna.t1.s.long$pre.crop, "bo", "ry", "ir", "er" )
+data.itsgen.rna.t1.s.long$mc.pi.sh <- fct_relevel(data.itsgen.rna.t1.s.long$mc.pi.sh, "bo", "ry", "ir", "er" )
 plot.ant.its.rna.t1<- data.itsgen.rna.t1.s.long %>%  
                         ggplot (mapping = aes(x=cc, y = Rel.abundance.RNA))+
                         geom_boxplot()+
@@ -919,4 +1567,139 @@ ant.t1 <- plot_grid(plot.ant.its.dna.t1,
                     align = "hv",
                     ncol = 1, nrow = 2)
 ant.t1 
+```
+
+
+
+
+###############################
+Plots
+
+#plots T0
+```{r}
+data.genits.dna.t0.s.long <- data.itsgen.dna.t0.s %>%
+  dplyr::select(mc.pi.sh,readcount.tot, Acremonium, Arthrobotrys, Fusarium, Haptocillium, Hirsutella,
+                Mortierella, Nematoctonus, Penicillium, Trichoderma) %>% #select most prevalent
+  tidyr::pivot_longer(cols = Acremonium:Trichoderma, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+              mutate (Rel.abundance.DNA = (Abundance/readcount.tot)) 
+data.genits.dna.t0.s.long$mc.pi.sh <- forcats::fct_relevel(data.genits.dna.t0.s.long$mc.pi.sh, "High", "Medium", "Low")
+  
+data.genits.rna.t0.s.long <- data.itsgen.rna.t0.s %>% 
+  dplyr::select(mc.pi.sh,readcount.tot,Arthrobotrys, Fusarium, Mortierella,Penicillium,Trichoderma) %>% 
+  tidyr::pivot_longer(cols = Arthrobotrys:Trichoderma, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+  mutate (Rel.abundance.RNA = (Abundance/readcount.tot)) 
+data.genits.rna.t0.s.long$mc.pi.sh <- forcats::fct_relevel(data.genits.rna.t0.s.long$mc.pi.sh, "High", "Medium", "Low")
+
+#horizontal 
+colorCode <- c(High = "#D55E00", Medium = "#E69F00",  Low = "#009E73")
+
+plot.ant.fun.dna.t0h<- data.genits.dna.t0.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.DNA, x =mc.pi.sh, fill = mc.pi.sh))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                        scale_y_continuous(labels = scales::percent)+
+                        scale_fill_manual(values = colorCode, name = "Mc levels")+
+                        labs(title = "Rel. abundance of fungal antagonists (DNA)", y = "Relative abundance")+
+                        facet_wrap(vars(Genus), scales = "free", strip.position = "top", nrow = 1)+
+   theme_minimal(base_size = 8)+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_blank()),
+        strip.text.x = element_text(size = 6),
+        axis.title.x = (element_blank()),
+        panel.spacing = unit(1, "lines"))+
+  annotate("segment",x=Inf,xend=-Inf,y=Inf,yend=Inf,color="black",lwd=1)
+plot.ant.fun.dna.t0h
+
+plot.ant.fun.rna.t0h<- data.genits.rna.t0.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.RNA, x =mc.pi.sh, fill = mc.pi.sh))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                        scale_y_continuous(labels = scales::percent)+
+                        scale_fill_manual(values = colorCode, name = "Mc levels")+
+                        labs(title = "Rel. abundance of fungal antagonists (RNA)", y = "Relative abundance")+
+                        facet_wrap(vars(Genus), scales = "free", strip.position = "top", nrow = 1)+
+   theme_minimal(base_size = 8)+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_blank()),
+        strip.text.x = element_text(size = 6),
+        axis.title.x = (element_blank()),
+        panel.spacing = unit(1, "lines"))+
+  annotate("segment",x=Inf,xend=-Inf,y=Inf,yend=Inf,color="black",lwd=1)
+
+plot.ant.fun.rna.t0h
+
+ant.t0 <- ggpubr::ggarrange(plot.ant.fun.dna.t0h, 
+                    plot.ant.fun.rna.t0h,
+                    labels = c( "C", "D"),
+                    common.legend = TRUE,
+                    legend = "bottom",
+                    align = "h",
+                    hjust = -1.5,
+                    nrow = 1,
+                    widths = c(1.85, 1))
+ant.t0 
+```
+
+#plots
+```{r}
+data.itsgen.dna.t1.s.long <- data.itsgen.dna.t1.s %>%
+  dplyr::select(cc, mc.pi.sh,readcount.tot, Acremonium, Arthrobotrys, Fusarium, Haptocillium, Hirsutella,
+                Mortierella, Nematoctonus, Penicillium, Trichoderma) %>% 
+  tidyr::pivot_longer(cols = Acremonium:Trichoderma, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+              mutate (Rel.abundance.DNA = (Abundance/readcount.tot)) 
+  
+data.itsgen.rna.t1.s.long <- data.itsgen.rna.t1.s %>% 
+  dplyr::select(cc, mc.pi.sh,readcount.tot,Arthrobotrys, Fusarium, Mortierella,Penicillium, Trichoderma) %>% 
+  tidyr::pivot_longer(cols = Arthrobotrys:Trichoderma, 
+               names_to = "Genus", 
+               values_to = "Abundance") %>% 
+  mutate (Rel.abundance.RNA = (Abundance/readcount.tot)) 
+
+
+#horizontal 
+colorCode2 <- c(BO = "#490092", BO.OSR_R = "#b66dff", BO.OSR_T = "#ffb6db",  FW = "grey50", OSR_A = "#6db6ff", OSR_R = "#006ddb", OSR_T = "#b6dbff", PHA = "#009292", PHA.OSR_T = "#004949", VE = "#db6d00", VE.OSR_T = "#924900")
+
+plot.ant.fun.dna.t1h<- data.itsgen.dna.t1.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.DNA, x =cc, fill = cc))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                        scale_y_continuous( labels = scales::percent)+
+                        scale_fill_manual(values = colorCode2, name = "cover crop")+
+                        labs(title = "Rel. abundance of fungal antagonists (DNA)", y = "Relative abundance")+
+                        facet_wrap(vars(Genus), scales = "free", strip.position = "top", nrow = 2)+
+   theme_minimal(base_size = 8)+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_blank()),
+        strip.text.x = element_text(size = 8),
+        axis.title.x = (element_blank()),
+        panel.spacing = unit(1, "lines"),
+        legend.position="none")+
+  annotate("segment",x=Inf,xend=-Inf,y=Inf,yend=Inf,color="black",lwd=1)
+
+plot.ant.fun.dna.t1h
+
+plot.ant.fun.rna.t1h<- data.itsgen.rna.t1.s.long %>%  
+                        ggplot (mapping = aes(y=Rel.abundance.RNA, x =cc, fill = cc))+
+                        geom_boxplot(orientation = "x", fatten = 1)+
+                        #geom_point(alpha = 0.5)+
+                          scale_y_continuous(labels = scales::percent)+
+                        scale_fill_manual(values = colorCode2, name = "cover crop")+
+                        labs(title = "Rel. abundance of fungal antagonists (RNA)", y = "Relative abundance ")+
+                        facet_wrap(vars(Genus), scales = "free", strip.position = "top", nrow = 1)+
+   theme_minimal(base_size = 8)+
+  theme(axis.line.y.left = (element_blank()), 
+        axis.text.x = (element_blank()),
+        strip.text.x = element_text(size = 8),
+        axis.title.x = (element_blank()),
+        panel.spacing = unit(1, "lines"),
+        legend.position="bottom")+
+  annotate("segment",x=Inf,xend=-Inf,y=Inf,yend=Inf,color="black",lwd=1)
+
+plot.ant.fun.rna.t1h
 ```
