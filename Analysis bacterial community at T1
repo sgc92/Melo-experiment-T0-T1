@@ -97,6 +97,8 @@ permutest(dispersion) #0.422 Results show homogeonous dispersion
 plot(dispersion, hull=FALSE, ellipse=FALSE, label = FALSE) ##sd ellipse
 #PERMANOVA
 adonis2(bact.dna_norm_bray ~ block2+pre.crop * cc , data = sampledf, permutations = 999 )
+adonis2(bact.dna_norm_bray ~ block2+ mc.pi.sh* cc , data = sampledf, permutations = 999 )
+adonis2(bact.dna_norm_bray ~ block2+ McT0* cc , data = sampledf, permutations = 999 )
 ```
 
 Pairwise permanova - considering only cover crop
@@ -169,6 +171,8 @@ library(pairwiseAdonis)
 sampledf <- data.frame(sample_data(bact.rna_norm))
 bact.rna_norm_bray <- phyloseq::distance(bact.rna_norm, method = "bray")
 adonis2(bact.rna_norm_bray ~ block2 + pre.crop * cc , data = sampledf)
+adonis2(bact.rna_norm_bray ~ block2+ mc.pi.sh* cc , data = sampledf, permutations = 999 )
+adonis2(bact.rna_norm_bray ~ block2+ McT0* cc , data = sampledf, permutations = 999 )
 ```
 
 Pairwise permanova - considering only cover crop
