@@ -145,7 +145,8 @@ dispersion<-betadisper(ant.fun.dna.gen.css_bray , group=sampledf$pre.crop)
 permutest(dispersion) #0.885
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
-adonis2(ant.fun.dna.gen.css_bray ~ block2+pre.crop+sample.type , data = sampledf, permutations = 999 )
+adonis2(ant.fun.dna.gen.css_bray ~ block2+sample.type+pre.crop , data = sampledf, permutations = 999 )
+adonis2(ant.fun.dna.gen.css_bray ~ block2+sample.type+mc.pi.sh , data = sampledf, permutations = 999 )
 
 #RNA
 sampledf <- data.frame(sample_data(subset_samples(ant.fun.rna.gen.css, time.point == "T0")))
@@ -154,7 +155,8 @@ dispersion<-betadisper(ant.fun.rna.gen.css_bray , group=sampledf$pre.crop)
 permutest(dispersion) #0.453
 plot(dispersion, hull=FALSE, ellipse=TRUE, label = FALSE) ##sd ellipse
 
-adonis2(ant.fun.rna.gen.css_bray ~ block2+pre.crop+sample.type , data = sampledf, permutations = 999 )
+adonis2(ant.fun.rna.gen.css_bray ~ block2+sample.type+pre.crop , data = sampledf, permutations = 999 )
+adonis2(ant.fun.rna.gen.css_bray ~ block2+sample.type+mc.pi.sh , data = sampledf, permutations = 999 )
 ```
 
 
