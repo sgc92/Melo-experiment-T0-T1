@@ -203,7 +203,7 @@ ps.bact@sam_data$sample.type
 ##Read counts: 
 
 ```{r}
-load(file = 'ps-selected-only-bact-filt-lowabd-no-neg2.RData')
+ps.bact <- load(file = 'ps-selected-only-bact-filt-lowabd-no-neg2.RData')
 ```
 
 # remove reps
@@ -342,3 +342,4 @@ ASV.reads.ps.bact3.rna$asvcount <- colSums(asv_df.ps.bact3.rna != 0)
 summary (ASV.reads.ps.bact3.rna)
 sum (ASV.reads.ps.bact3.rna$`readcount(ps.bact3.rna)`)
 ```
+
